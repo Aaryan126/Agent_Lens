@@ -22,6 +22,8 @@ class SlackAction:
     action: str
     gate_id: str
     user_id: str | None = None
+    channel_id: str | None = None
+    message_ts: str | None = None
 
 
 def verify_slack_signature(
@@ -161,6 +163,47 @@ def post_gate_message(
     return data
 
 
+def update_gate_message(
+    *,
+    bot_token: str,
+    channel_id: str,
+    message_ts: str,
+    gate: Gate,
+    http_client: httpx.Client | None = None,
+) -> dict[str, Any]:
+    if not bot_token or bot_token == "replace_me":
+        raise ValueError("SLACK_BOT_TOKEN is required to update Slack messages")
+    if not channel_id:
+        raise ValueError("Slack channel ID is required to update Slack messages")
+    if not message_ts:
+        raise ValueError("Slack message timestamp is required to update Slack messages")
+
+    message = render_gate_message(gate, response_type="in_channel")
+    payload = {
+        "channel": channel_id,
+        "ts": message_ts,
+        "text": message["text"],
+        "blocks": message["blocks"],
+    }
+    headers = {
+        "Authorization": f"Bearer {bot_token}",
+        "Content-Type": "application/json; charset=utf-8",
+    }
+    client = http_client or httpx.Client(timeout=10)
+    should_close = http_client is None
+    try:
+        response = client.post("https://slack.com/api/chat.update", headers=headers, json=payload)
+        response.raise_for_status()
+        data = response.json()
+    finally:
+        if should_close:
+            client.close()
+
+    if not data.get("ok"):
+        raise RuntimeError(f"Slack chat.update failed: {data.get('error')}")
+    return data
+
+
 def render_explain_message(gate: Gate) -> dict[str, Any]:
     evidence = "\n".join(f"- {item}" for item in gate.risk_assessment.evidence)
     affected = ", ".join(gate.risk_assessment.affected_files) or "No affected files recorded"
@@ -204,6 +247,8 @@ def parse_slack_action(payload: dict[str, Any]) -> SlackAction:
         action=action_id,
         gate_id=gate_id,
         user_id=(payload.get("user") or {}).get("id"),
+        channel_id=(payload.get("channel") or {}).get("id"),
+        message_ts=(payload.get("message") or {}).get("ts"),
     )
 
 

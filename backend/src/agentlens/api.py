@@ -29,6 +29,7 @@ from agentlens.slack import (
     render_explain_message,
     render_gate_message,
     require_valid_slack_request,
+    update_gate_message,
 )
 from agentlens.storage import store
 
@@ -207,6 +208,13 @@ async def slack_actions(request: Request) -> dict[str, object]:
                     "Continue only after inspecting references and proposing a safer scoped change."
                 ),
             ),
+        )
+    if action.channel_id and action.message_ts:
+        update_gate_message(
+            bot_token=load_settings().slack_bot_token,
+            channel_id=action.channel_id,
+            message_ts=action.message_ts,
+            gate=gate,
         )
     return render_gate_message(gate)
 

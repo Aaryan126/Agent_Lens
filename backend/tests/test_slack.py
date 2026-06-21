@@ -12,7 +12,13 @@ from fastapi.testclient import TestClient
 from agentlens.api import app
 from agentlens.schemas import GateStatus, SessionStart, ToolCallProposal
 from agentlens.session import AgentLensSession
-from agentlens.slack import post_gate_message, render_gate_message, verify_slack_signature
+from agentlens.slack import (
+    parse_slack_action,
+    post_gate_message,
+    render_gate_message,
+    update_gate_message,
+    verify_slack_signature,
+)
 from agentlens.storage import InMemoryStore, store
 
 
@@ -65,11 +71,28 @@ def test_slack_gate_message_contains_decision_buttons(tmp_path: Path, monkeypatc
 def test_slack_action_endpoint_approves_gate(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "replace_me")
     monkeypatch.setenv("SLACK_SIGNING_SECRET", "test-secret")
+    monkeypatch.setenv("SLACK_BOT_TOKEN", "xoxb-test")
     store.clear()
     gate = _pending_gate(tmp_path, storage=store)
+    updates = []
+
+    def fake_update_gate_message(*, bot_token, channel_id, message_ts, gate):
+        updates.append(
+            {
+                "bot_token": bot_token,
+                "channel_id": channel_id,
+                "message_ts": message_ts,
+                "gate_id": gate.id,
+            }
+        )
+        return {"ok": True}
+
+    monkeypatch.setattr("agentlens.api.update_gate_message", fake_update_gate_message)
     payload = {
         "type": "block_actions",
         "user": {"id": "U123"},
+        "channel": {"id": "C123"},
+        "message": {"ts": "123.456"},
         "actions": [{"action_id": "approve_gate", "value": gate.id}],
     }
     body = urlencode({"payload": json.dumps(payload)}).encode()
@@ -89,6 +112,14 @@ def test_slack_action_endpoint_approves_gate(tmp_path: Path, monkeypatch) -> Non
     assert response.status_code == 200
     assert store.gates[gate.id].status == GateStatus.APPROVED
     assert response.json()["replace_original"] is True
+    assert updates == [
+        {
+            "bot_token": "xoxb-test",
+            "channel_id": "C123",
+            "message_ts": "123.456",
+            "gate_id": gate.id,
+        }
+    ]
 
 
 def test_slack_action_endpoint_rejects_bad_signature(tmp_path: Path, monkeypatch) -> None:
@@ -164,6 +195,29 @@ def test_post_gate_message_sends_block_kit_payload(tmp_path: Path, monkeypatch) 
     assert client.requests[0]["json"]["blocks"][-1]["type"] == "actions"
 
 
+def test_update_gate_message_removes_decision_buttons_after_resolution(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "replace_me")
+    gate = _pending_gate(tmp_path)
+    gate.status = GateStatus.APPROVED
+    client = FakeSlackHttpClient({"ok": True, "channel": "C123", "ts": "123.456"})
+
+    result = update_gate_message(
+        bot_token="xoxb-test",
+        channel_id="C123",
+        message_ts="123.456",
+        gate=gate,
+        http_client=client,
+    )
+
+    assert result["ok"] is True
+    assert client.requests[0]["url"] == "https://slack.com/api/chat.update"
+    assert client.requests[0]["json"]["channel"] == "C123"
+    assert client.requests[0]["json"]["ts"] == "123.456"
+    assert client.requests[0]["json"]["blocks"][-1]["type"] != "actions"
+
+
 def test_post_gate_message_surfaces_slack_error(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "replace_me")
     gate = _pending_gate(tmp_path)
@@ -180,6 +234,21 @@ def test_post_gate_message_surfaces_slack_error(tmp_path: Path, monkeypatch) -> 
         assert "channel_not_found" in str(exc)
     else:
         raise AssertionError("expected Slack API error")
+
+
+def test_parse_slack_action_extracts_message_target() -> None:
+    action = parse_slack_action(
+        {
+            "user": {"id": "U123"},
+            "channel": {"id": "C123"},
+            "message": {"ts": "123.456"},
+            "actions": [{"action_id": "approve_gate", "value": "gate_123"}],
+        }
+    )
+
+    assert action.user_id == "U123"
+    assert action.channel_id == "C123"
+    assert action.message_ts == "123.456"
 
 
 def _pending_gate(tmp_path: Path, storage: InMemoryStore | None = None):
