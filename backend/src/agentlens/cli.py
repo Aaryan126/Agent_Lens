@@ -7,6 +7,7 @@ from pathlib import Path
 from agentlens.schemas import SessionStart, ToolCallProposal
 from agentlens.session import AgentLensSession
 from agentlens.simulator import default_demo_proposals
+from agentlens.slack import render_gate_message
 
 
 def main() -> None:
@@ -21,6 +22,11 @@ def main() -> None:
         "--fixture",
         default=None,
         help="Optional JSON file containing a list of tool-call proposal objects.",
+    )
+    parser.add_argument(
+        "--slack",
+        action="store_true",
+        help="Print Slack Block Kit message JSON for pending gates.",
     )
     args = parser.parse_args()
 
@@ -47,9 +53,10 @@ def main() -> None:
                 indent=2,
             )
         )
+        if args.slack and gate.status == "pending":
+            print(json.dumps(render_gate_message(gate), default=str, indent=2))
 
 
 def _load_fixture(path: str, session_id: str) -> list[ToolCallProposal]:
     raw_items = json.loads(Path(path).read_text())
     return [ToolCallProposal(session_id=session_id, **item) for item in raw_items]
-

@@ -2,14 +2,23 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import parse_qs
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from agentlens.config import load_settings
 from agentlens.schemas import Gate, GateStatus, Session, SessionStart, Timeline, ToolCallProposal
 from agentlens.session import AgentLensSession
 from agentlens.simulator import default_demo_proposals
+from agentlens.slack import (
+    decode_slack_payload,
+    parse_slack_action,
+    render_explain_message,
+    render_gate_message,
+    require_valid_slack_request,
+)
 from agentlens.storage import store
 
 app = FastAPI(title="AgentLens", version="0.1.0")
@@ -109,6 +118,50 @@ def explain_gate(gate_id: str) -> dict[str, object]:
         "risk": gate.risk_assessment,
         "policy": gate.policy_decision,
     }
+
+
+@app.post("/integrations/slack/actions")
+async def slack_actions(request: Request) -> dict[str, object]:
+    body = await request.body()
+    require_valid_slack_request(load_settings(), dict(request.headers), body)
+
+    form = parse_qs(body.decode())
+    raw_payload = (form.get("payload") or [None])[0]
+    if raw_payload is None:
+        raise HTTPException(status_code=400, detail="Slack request missing payload")
+
+    payload = decode_slack_payload(raw_payload)
+    action = parse_slack_action(payload)
+    gate = store.gates.get(action.gate_id)
+    if gate is None:
+        raise HTTPException(status_code=404, detail="gate not found")
+
+    if action.action == "explain_gate":
+        return render_explain_message(gate)
+    if action.action == "approve_gate":
+        gate = _resolve_gate(
+            action.gate_id,
+            GateStatus.APPROVED,
+            DecisionPayload(reason=f"Approved in Slack by {action.user_id or 'unknown user'}."),
+        )
+    elif action.action == "block_gate":
+        gate = _resolve_gate(
+            action.gate_id,
+            GateStatus.BLOCKED,
+            DecisionPayload(reason=f"Blocked in Slack by {action.user_id or 'unknown user'}."),
+        )
+    elif action.action == "modify_gate":
+        gate = _resolve_gate(
+            action.gate_id,
+            GateStatus.MODIFIED,
+            DecisionPayload(
+                reason=f"Modified in Slack by {action.user_id or 'unknown user'}.",
+                modified_instruction=(
+                    "Continue only after inspecting references and proposing a safer scoped change."
+                ),
+            ),
+        )
+    return render_gate_message(gate)
 
 
 def _resolve_gate(gate_id: str, status: GateStatus, payload: DecisionPayload) -> Gate:

@@ -82,6 +82,13 @@ cd backend
 uv run agentlens-demo --fixture ../examples/demo_session.json
 ```
 
+To preview Slack Block Kit payloads for pending gates:
+
+```bash
+cd backend
+uv run agentlens-demo --fixture ../examples/demo_session.json --slack
+```
+
 ## Local Demo Flow
 
 1. Start the API.
@@ -100,6 +107,22 @@ ledger card to avoid unnecessary model calls.
 
 The local review UI uses `POST /demo/session` to create a sample session and decision
 endpoints under `/gates/{id}` to approve, block, or modify pending gates.
+
+## Slack Integration
+
+AgentLens exposes `POST /integrations/slack/actions` for Slack Block Kit interactions.
+It verifies `X-Slack-Signature` and `X-Slack-Request-Timestamp` using
+`SLACK_SIGNING_SECRET`, then maps button actions to the existing gate decision flow.
+
+Supported Slack action IDs:
+
+- `approve_gate`
+- `block_gate`
+- `modify_gate`
+- `explain_gate`
+
+The message renderer lives in `agentlens.slack.render_gate_message`. Use the CLI
+`--slack` flag to preview the payload before wiring a real Slack app.
 
 ## Environment Variables
 

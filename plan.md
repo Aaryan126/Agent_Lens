@@ -87,7 +87,9 @@ Automatic validation:
 Human validation:
 - Run one Slack approval demo with credentials.
 
-Status: planned.
+Status: complete for backend integration. Block Kit rendering, signature verification,
+approve/block/modify/explain handling, and CLI payload preview are implemented. A real
+Slack app still needs to be configured for human validation.
 
 ## Phase 6: Session Ledger
 
