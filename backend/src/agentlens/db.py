@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import DateTime, Integer, String
+from sqlalchemy import DateTime, Integer, String, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -62,7 +62,15 @@ class AuditEventRecord(Base):
 
 
 def create_engine(database_url: str) -> AsyncEngine:
-    return create_async_engine(database_url)
+    return create_async_engine(normalize_async_database_url(database_url))
+
+
+def normalize_async_database_url(database_url: str) -> str:
+    if database_url.startswith("postgres://"):
+        return database_url.replace("postgres://", "postgresql+asyncpg://", 1)
+    if database_url.startswith("postgresql://"):
+        return database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    return database_url
 
 
 def create_sessionmaker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
@@ -93,6 +101,11 @@ class SqlAlchemyLedgerRepository:
             )
             await db.commit()
 
+    async def list_sessions(self) -> list[Session]:
+        async with self.session_factory() as db:
+            records = (await db.scalars(select(SessionRecord))).all()
+        return [Session.model_validate(record.payload) for record in records]
+
     async def add_trace(self, trace: TraceEvent) -> None:
         async with self.session_factory() as db:
             db.add(
@@ -106,6 +119,11 @@ class SqlAlchemyLedgerRepository:
                 )
             )
             await db.commit()
+
+    async def list_traces(self) -> list[TraceEvent]:
+        async with self.session_factory() as db:
+            records = (await db.scalars(select(TraceRecord).order_by(TraceRecord.created_at))).all()
+        return [TraceEvent.model_validate(record.payload) for record in records]
 
     async def upsert_gate(self, gate: Gate) -> None:
         async with self.session_factory() as db:
@@ -130,3 +148,34 @@ class SqlAlchemyLedgerRepository:
                 existing.resolved_at = gate.resolved_at
                 existing.payload = payload
             await db.commit()
+
+    async def list_gates(self) -> list[Gate]:
+        async with self.session_factory() as db:
+            records = (await db.scalars(select(GateRecord).order_by(GateRecord.created_at))).all()
+        return [Gate.model_validate(record.payload) for record in records]
+
+    async def add_audit_event(self, event_type: str, payload: dict[str, Any]) -> None:
+        async with self.session_factory() as db:
+            db.add(
+                AuditEventRecord(
+                    event_type=event_type,
+                    created_at=datetime.now(UTC),
+                    payload=payload,
+                )
+            )
+            await db.commit()
+
+    async def list_audit_events(self, limit: int | None = None) -> list[dict[str, Any]]:
+        statement = select(AuditEventRecord).order_by(AuditEventRecord.created_at)
+        if limit is not None:
+            statement = statement.limit(limit)
+        async with self.session_factory() as db:
+            records = (await db.scalars(statement)).all()
+        return [
+            {
+                "event_type": record.event_type,
+                "created_at": record.created_at.isoformat(),
+                "payload": record.payload,
+            }
+            for record in records
+        ]

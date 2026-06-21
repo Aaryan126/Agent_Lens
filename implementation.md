@@ -35,17 +35,24 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 - Competition demo script and rubric checklist are available in `scripts/competition_demo.sh` and `docs/competition_demo.md`.
 - Demo summaries are post-processed to plain ASCII English with bounded length and complete punctuation.
 - Full competition demo script was verified end to end.
+- Live Slack and PostgreSQL validation steps are documented in `docs/live_validation.md`.
+- Slack Web API sender is implemented for posting pending gate cards to a real channel with `--slack-send-channel`.
+- `POST /demo/slack/send` creates a backend-owned demo session and posts pending gate cards so Slack button clicks resolve against the running FastAPI store.
+- Backend local verification passed after the Slack sender dependency fix: `uv run pytest -m 'not integration'` reported 28 passed, and `uv run ruff check .` passed.
+- Live Slack validation passed on June 21, 2026: backend-owned demo cards posted to channel `C0BBW328TEF`, Slack button clicks reached `/integrations/slack/actions` through ngrok, and FastAPI returned `200 OK`.
+- PostgreSQL-backed runtime storage is implemented behind `AGENTLENS_STORAGE_BACKEND=postgres`; sessions, traces, gates, and audit events are mirrored to SQLAlchemy repositories and reloaded into the runtime working set.
+- Deployment prep is implemented with configurable CORS, provider Postgres URL normalization, `backend/Dockerfile`, `render.yaml`, `frontend/.env.example`, and `docs/deployment.md`.
 
 ## Known Gaps
 
-- PostgreSQL and Redis are documented production targets but runtime session state is still in-memory.
-- Slack backend integration is implemented, but a real Slack app still needs to be configured for human validation.
-- Runtime API state is still in-memory; PostgreSQL models exist but are not yet wired into FastAPI request handling.
+- Slack backend integration is implemented and live-validated through ngrok.
+- PostgreSQL runtime storage is implemented but still needs live validation against a real managed Postgres instance.
+- Redis remains a documented future target for in-flight state/cache, but it is not required for the hosted demo path yet.
 
 ## Next Steps
 
-1. Review the frontend npm audit finding before forcing dependency changes; the available audit fix is breaking.
-2. Configure a real Slack app and point its Interactivity Request URL at `/integrations/slack/actions`.
-3. Wire runtime session/gate/timeline state to PostgreSQL using the new SQLAlchemy repository seam.
-4. Configure a real Slack app and validate Slack button clicks against a public tunnel.
-5. Configure live Slack and PostgreSQL services for production-like validation.
+1. Validate `AGENTLENS_STORAGE_BACKEND=postgres` against a real local or hosted PostgreSQL instance.
+2. Deploy the backend with `render.yaml`, set secrets, and verify hosted `/health`.
+3. Deploy the frontend with `NEXT_PUBLIC_AGENTLENS_API_URL` pointed at the hosted backend.
+4. Update Slack Interactivity to the hosted backend URL and repeat the live button test.
+5. Review the frontend npm audit finding before forcing dependency changes; the available audit fix is breaking.

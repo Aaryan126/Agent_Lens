@@ -1,4 +1,11 @@
-from agentlens.db import AuditEventRecord, Base, GateRecord, SessionRecord, TraceRecord
+from agentlens.db import (
+    AuditEventRecord,
+    Base,
+    GateRecord,
+    SessionRecord,
+    TraceRecord,
+    normalize_async_database_url,
+)
 
 
 def test_postgres_metadata_contains_ledger_tables() -> None:
@@ -21,3 +28,13 @@ def test_records_use_json_payload_columns() -> None:
     assert "payload" in TraceRecord.__table__.columns
     assert "payload" in GateRecord.__table__.columns
     assert "payload" in AuditEventRecord.__table__.columns
+
+
+def test_database_url_is_normalized_for_asyncpg() -> None:
+    assert normalize_async_database_url("postgres://u:p@host/db").startswith("postgresql+asyncpg://")
+    assert normalize_async_database_url("postgresql://u:p@host/db").startswith(
+        "postgresql+asyncpg://"
+    )
+    assert normalize_async_database_url("postgresql+asyncpg://u:p@host/db").startswith(
+        "postgresql+asyncpg://"
+    )

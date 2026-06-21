@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field
@@ -21,11 +21,18 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     slack_bot_token: str = ""
     slack_signing_secret: str = ""
+    slack_channel_id: str = ""
     agentlens_audit_log_path: str = "local_data/agentlens_audit.jsonl"
+    agentlens_storage_backend: Literal["memory", "postgres"] = "memory"
+    agentlens_cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     @property
     def has_openai_key(self) -> bool:
         return bool(self.openai_api_key and self.openai_api_key != "replace_me")
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [origin.strip() for origin in self.agentlens_cors_origins.split(",") if origin.strip()]
 
 
 class PolicyRule(BaseModel):

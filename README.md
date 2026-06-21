@@ -12,6 +12,7 @@ The first build is local-first: a simulator emits tool-call proposals through th
 - `plan.md`: phased build and validation checklist.
 - `implementation.md`: latest implementation status.
 - `AGENTS.md`: instructions for Codex and other coding agents working on this repo.
+- `docs/deployment.md`: hosted demo deployment checklist.
 
 ## Backend Capabilities
 
@@ -89,6 +90,22 @@ cd backend
 uv run agentlens-demo --fixture ../examples/demo_session.json --slack
 ```
 
+To post pending gate cards to a Slack channel after configuring `SLACK_BOT_TOKEN`:
+
+```bash
+cd backend
+uv run agentlens-demo --fixture ../examples/demo_session.json --slack-send-channel C0123456789
+```
+
+For live button validation, prefer posting from the running backend so the clicked Slack
+buttons resolve gates in the same server process:
+
+```bash
+curl -X POST http://127.0.0.1:8000/demo/slack/send \
+  -H "Content-Type: application/json" \
+  -d '{"channel_id":"C0123456789"}'
+```
+
 To run Codex CLI in read-only JSON mode and gate any parsed tool-call proposals:
 
 ```bash
@@ -127,6 +144,8 @@ The ledger also calls `GET /sessions/{id}/analytics` to show:
 AgentLens exposes `POST /integrations/slack/actions` for Slack Block Kit interactions.
 It verifies `X-Slack-Signature` and `X-Slack-Request-Timestamp` using
 `SLACK_SIGNING_SECRET`, then maps button actions to the existing gate decision flow.
+For local live validation, `POST /demo/slack/send` creates a backend-owned demo session
+and posts pending cards to a real Slack channel.
 
 Supported Slack action IDs:
 
@@ -187,9 +206,12 @@ is the migration seam for moving session/gate/timeline storage into PostgreSQL.
 - `OPENAI_EMBEDDING_MODEL`: embedding model for goal drift.
 - `DATABASE_URL`: future PostgreSQL persistence target.
 - `REDIS_URL`: future in-flight state/cache target.
-- `SLACK_BOT_TOKEN`: future Slack approval surface.
-- `SLACK_SIGNING_SECRET`: future Slack request verification.
+- `SLACK_BOT_TOKEN`: Slack bot token for posting approval cards.
+- `SLACK_SIGNING_SECRET`: Slack request verification secret.
+- `SLACK_CHANNEL_ID`: default Slack channel for backend-owned demo cards.
 - `AGENTLENS_AUDIT_LOG_PATH`: local append-only JSONL audit log path.
+- `AGENTLENS_STORAGE_BACKEND`: `memory` for local fallback or `postgres` for hosted durable state.
+- `AGENTLENS_CORS_ORIGINS`: comma-separated frontend origins allowed to call the backend.
 
 ## Status
 
@@ -204,3 +226,9 @@ Run the local verification and demo preview:
 ```
 
 The judging script and rubric mapping live in `docs/competition_demo.md`.
+
+For live Slack/PostgreSQL validation steps, use `docs/live_validation.md`.
+
+For hosted judging deployment, use `docs/deployment.md`. The intended demo setup is a
+public backend with PostgreSQL enabled plus a public Vercel frontend configured with
+`NEXT_PUBLIC_AGENTLENS_API_URL`.

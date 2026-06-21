@@ -8,7 +8,8 @@ from agentlens.adapters.codex_cli import CodexCliAdapter
 from agentlens.schemas import SessionStart, ToolCallProposal
 from agentlens.session import AgentLensSession
 from agentlens.simulator import default_demo_proposals
-from agentlens.slack import render_gate_message
+from agentlens.slack import post_gate_message, render_gate_message
+from agentlens.config import load_settings
 
 
 def main() -> None:
@@ -28,6 +29,11 @@ def main() -> None:
         "--slack",
         action="store_true",
         help="Print Slack Block Kit message JSON for pending gates.",
+    )
+    parser.add_argument(
+        "--slack-send-channel",
+        default=None,
+        help="Post pending gate cards to this Slack channel ID using SLACK_BOT_TOKEN.",
     )
     parser.add_argument(
         "--codex-prompt",
@@ -84,6 +90,14 @@ def main() -> None:
         )
         if args.slack and gate.status == "pending":
             print(json.dumps(render_gate_message(gate), default=str, indent=2))
+        if args.slack_send_channel and gate.status == "pending":
+            settings = load_settings()
+            result = post_gate_message(
+                bot_token=settings.slack_bot_token,
+                channel_id=args.slack_send_channel,
+                gate=gate,
+            )
+            print(json.dumps({"slack_posted": True, "channel": result.get("channel"), "ts": result.get("ts")}, indent=2))
 
 
 def _load_fixture(path: str, session_id: str) -> list[ToolCallProposal]:

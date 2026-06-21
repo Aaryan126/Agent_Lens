@@ -24,6 +24,7 @@ from agentlens.simulator import default_demo_proposals
 from agentlens.slack import (
     decode_slack_payload,
     parse_slack_action,
+    post_gate_message,
     render_explain_message,
     render_gate_message,
     require_valid_slack_request,
@@ -31,9 +32,10 @@ from agentlens.slack import (
 from agentlens.storage import store
 
 app = FastAPI(title="AgentLens", version="0.1.0")
+settings = load_settings()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -51,6 +53,10 @@ class DemoSessionResponse(BaseModel):
     session: Session
     gates: list[Gate]
     timeline: Timeline
+
+
+class SlackDemoPayload(BaseModel):
+    channel_id: str | None = None
 
 
 @app.get("/health")
@@ -76,6 +82,23 @@ def create_demo_session() -> DemoSessionResponse:
     )
     gates = [session.propose(proposal) for proposal in default_demo_proposals(session.session.id)]
     return DemoSessionResponse(session=session.session, gates=gates, timeline=session.timeline())
+
+
+@app.post("/demo/slack/send")
+def send_demo_slack_cards(payload: SlackDemoPayload) -> dict[str, object]:
+    settings = load_settings()
+    channel_id = payload.channel_id or settings.slack_channel_id
+    demo = create_demo_session()
+    posted = []
+    for gate in demo.gates:
+        if gate.status == GateStatus.PENDING:
+            result = post_gate_message(
+                bot_token=settings.slack_bot_token,
+                channel_id=channel_id,
+                gate=gate,
+            )
+            posted.append({"gate_id": gate.id, "channel": result.get("channel"), "ts": result.get("ts")})
+    return {"session_id": demo.session.id, "posted": posted}
 
 
 @app.post("/sessions/{session_id}/tool-calls")

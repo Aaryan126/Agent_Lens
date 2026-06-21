@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from agentlens.api import app
 from agentlens.schemas import GateStatus, SessionStart, ToolCallProposal
 from agentlens.session import AgentLensSession
-from agentlens.slack import render_gate_message, verify_slack_signature
+from agentlens.slack import post_gate_message, render_gate_message, verify_slack_signature
 from agentlens.storage import InMemoryStore, store
 
 
@@ -122,6 +122,66 @@ def test_slack_action_endpoint_rejects_bad_signature(tmp_path: Path, monkeypatch
     assert response.status_code == 401
 
 
+def test_demo_slack_send_endpoint_posts_backend_owned_gates(monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "replace_me")
+    monkeypatch.setenv("SLACK_BOT_TOKEN", "xoxb-test")
+    monkeypatch.setenv("SLACK_CHANNEL_ID", "C123")
+    store.clear()
+    posted = []
+
+    def fake_post_gate_message(*, bot_token, channel_id, gate):
+        posted.append({"bot_token": bot_token, "channel_id": channel_id, "gate_id": gate.id})
+        return {"ok": True, "channel": channel_id, "ts": f"ts-{len(posted)}"}
+
+    monkeypatch.setattr("agentlens.api.post_gate_message", fake_post_gate_message)
+
+    client = TestClient(app)
+    response = client.post("/demo/slack/send", json={})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["session_id"].startswith("ses_")
+    assert len(body["posted"]) == 2
+    assert len(posted) == 2
+    assert all(item["gate_id"] in store.gates for item in posted)
+
+
+def test_post_gate_message_sends_block_kit_payload(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "replace_me")
+    gate = _pending_gate(tmp_path)
+    client = FakeSlackHttpClient({"ok": True, "channel": "C123", "ts": "123.456"})
+
+    result = post_gate_message(
+        bot_token="xoxb-test",
+        channel_id="C123",
+        gate=gate,
+        http_client=client,
+    )
+
+    assert result["ok"] is True
+    assert client.requests[0]["url"] == "https://slack.com/api/chat.postMessage"
+    assert client.requests[0]["json"]["channel"] == "C123"
+    assert client.requests[0]["json"]["blocks"][-1]["type"] == "actions"
+
+
+def test_post_gate_message_surfaces_slack_error(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "replace_me")
+    gate = _pending_gate(tmp_path)
+    client = FakeSlackHttpClient({"ok": False, "error": "channel_not_found"})
+
+    try:
+        post_gate_message(
+            bot_token="xoxb-test",
+            channel_id="C404",
+            gate=gate,
+            http_client=client,
+        )
+    except RuntimeError as exc:
+        assert "channel_not_found" in str(exc)
+    else:
+        raise AssertionError("expected Slack API error")
+
+
 def _pending_gate(tmp_path: Path, storage: InMemoryStore | None = None):
     active_store = storage or InMemoryStore()
     session = AgentLensSession.start(
@@ -142,3 +202,24 @@ def _signature(secret: str, timestamp: str, body: bytes) -> str:
     base = f"v0:{timestamp}:{body.decode()}".encode()
     digest = hmac.new(secret.encode(), base, hashlib.sha256).hexdigest()
     return f"v0={digest}"
+
+
+class FakeSlackResponse:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self.payload
+
+
+class FakeSlackHttpClient:
+    def __init__(self, payload):
+        self.payload = payload
+        self.requests = []
+
+    def post(self, url, headers, json):
+        self.requests.append({"url": url, "headers": headers, "json": json})
+        return FakeSlackResponse(self.payload)

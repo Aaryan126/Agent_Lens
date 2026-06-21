@@ -87,9 +87,10 @@ Automatic validation:
 Human validation:
 - Run one Slack approval demo with credentials.
 
-Status: complete for backend integration. Block Kit rendering, signature verification,
-approve/block/modify/explain handling, and CLI payload preview are implemented. A real
-Slack app still needs to be configured for human validation.
+Status: complete and live-validated. Block Kit rendering, signature verification,
+approve/block/modify/explain handling, CLI payload preview, Slack Web API posting, and
+backend-owned demo card posting are implemented. On June 21, 2026, Slack button clicks
+reached `/integrations/slack/actions` through ngrok and returned `200 OK`.
 
 ## Phase 6: Session Ledger
 
@@ -124,4 +125,24 @@ Status: mostly complete for local competition demo. AgentLens now has an append-
 Real Codex JSONL validation confirmed `command_execution` and `file_change` parsing.
 Read-only Codex inspection commands auto-execute as low risk, while file changes become
 `fs.write` / `fs.delete` proposals. The final local demo script and rubric checklist are
-implemented. Remaining work: live Slack validation and PostgreSQL-backed runtime state.
+implemented. Remaining work: wire PostgreSQL-backed runtime state.
+
+## Phase 8: Hosted Judging Demo
+
+Make AgentLens deployable behind stable public URLs so judges can use a live link without
+local backend, frontend, ngrok, or Slack tunnel setup.
+
+Automatic validation:
+- Backend container builds.
+- Backend tests pass with the PostgreSQL storage backend code path covered by repository tests.
+- Frontend build passes with `NEXT_PUBLIC_AGENTLENS_API_URL` configured.
+- Hosted `/health` returns `200 OK`.
+
+Human validation:
+- Open the public frontend URL and create a demo session.
+- Post Slack demo cards from the public backend.
+- Click Slack Approve / Block / Modify and confirm cards update.
+- Confirm sessions survive backend restart when PostgreSQL is enabled.
+
+Status: in progress. Deployment docs, backend Dockerfile, Render blueprint, configurable CORS,
+PostgreSQL URL normalization, and opt-in PostgreSQL-backed runtime storage are implemented.

@@ -1,9 +1,14 @@
 from __future__ import annotations
 
-from threading import RLock
+import asyncio
+from threading import RLock, Thread
+from typing import Any, Coroutine
+
+from pydantic import BaseModel
 
 from agentlens.audit import AuditLog, JsonlAuditLog, NullAuditLog
 from agentlens.config import load_settings
+from agentlens.db import SqlAlchemyLedgerRepository, create_engine, create_sessionmaker
 from agentlens.schemas import Gate, Session, TraceEvent
 
 
@@ -62,8 +67,86 @@ class InMemoryStore:
             self.gates.clear()
 
 
+class DatabaseAuditLog(AuditLog):
+    def __init__(self, repository: SqlAlchemyLedgerRepository) -> None:
+        self.repository = repository
+
+    def append(self, event_type: str, payload: BaseModel | dict[str, Any]) -> None:
+        serialized = payload.model_dump(mode="json") if isinstance(payload, BaseModel) else payload
+        run_blocking(self.repository.add_audit_event(event_type, serialized))
+
+    def read_all(self) -> list[dict[str, Any]]:
+        return run_blocking(self.repository.list_audit_events())
+
+
+class DatabaseBackedStore(InMemoryStore):
+    """In-memory working set mirrored to PostgreSQL for hosted demos."""
+
+    def __init__(self, repository: SqlAlchemyLedgerRepository) -> None:
+        self.repository = repository
+        super().__init__(audit_log=DatabaseAuditLog(repository))
+        self.reload()
+
+    def reload(self) -> None:
+        sessions = run_blocking(self.repository.list_sessions())
+        traces = run_blocking(self.repository.list_traces())
+        gates = run_blocking(self.repository.list_gates())
+        with self._lock:
+            self.sessions = {session.id: session for session in sessions}
+            self.traces = traces
+            self.gates = {gate.id: gate for gate in gates}
+
+    def add_session(self, session: Session) -> Session:
+        result = super().add_session(session)
+        run_blocking(self.repository.add_session(session))
+        return result
+
+    def add_trace(self, event: TraceEvent) -> TraceEvent:
+        result = super().add_trace(event)
+        run_blocking(self.repository.add_trace(event))
+        return result
+
+    def add_gate(self, gate: Gate) -> Gate:
+        result = super().add_gate(gate)
+        run_blocking(self.repository.upsert_gate(gate))
+        return result
+
+    def update_gate(self, gate: Gate) -> Gate:
+        result = super().update_gate(gate)
+        run_blocking(self.repository.upsert_gate(gate))
+        return result
+
+
+def run_blocking(coroutine: Coroutine[Any, Any, Any]) -> Any:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coroutine)
+
+    result: dict[str, Any] = {}
+
+    def target() -> None:
+        try:
+            result["value"] = asyncio.run(coroutine)
+        except BaseException as exc:
+            result["error"] = exc
+
+    thread = Thread(target=target)
+    thread.start()
+    thread.join()
+    if "error" in result:
+        raise result["error"]
+    return result.get("value")
+
+
 def create_default_store() -> InMemoryStore:
     settings = load_settings()
+    if settings.agentlens_storage_backend == "postgres":
+        engine = create_engine(settings.database_url)
+        session_factory = create_sessionmaker(engine)
+        repository = SqlAlchemyLedgerRepository(session_factory)
+        run_blocking(repository.create_schema(engine))
+        return DatabaseBackedStore(repository)
     return InMemoryStore(audit_log=JsonlAuditLog(settings.agentlens_audit_log_path))
 
 

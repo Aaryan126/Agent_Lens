@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: agentlens-api
+    env: docker
+    plan: free
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: AGENTLENS_STORAGE_BACKEND
+        value: postgres
+      - key: DATABASE_URL
+        fromDatabase:
+          name: agentlens-db
+          property: connectionString
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4.1
+      - key: OPENAI_EMBEDDING_MODEL
+        value: text-embedding-3-small
+      - key: SLACK_BOT_TOKEN
+        sync: false
+      - key: SLACK_SIGNING_SECRET
+        sync: false
+      - key: SLACK_CHANNEL_ID
+        sync: false
+      - key: AGENTLENS_CORS_ORIGINS
+        sync: false
+
+databases:
+  - name: agentlens-db
+    plan: free

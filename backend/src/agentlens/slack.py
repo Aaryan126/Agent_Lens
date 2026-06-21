@@ -7,6 +7,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+import httpx
 from fastapi import HTTPException
 
 from agentlens.config import Settings
@@ -121,6 +122,43 @@ def render_gate_message(gate: Gate, *, response_type: str = "ephemeral") -> dict
         "text": gate.intelligence_card.summary if gate.intelligence_card else "AgentLens gate",
         "blocks": render_gate_blocks(gate),
     }
+
+
+def post_gate_message(
+    *,
+    bot_token: str,
+    channel_id: str,
+    gate: Gate,
+    http_client: httpx.Client | None = None,
+) -> dict[str, Any]:
+    if not bot_token or bot_token == "replace_me":
+        raise ValueError("SLACK_BOT_TOKEN is required to post Slack messages")
+    if not channel_id or channel_id == "replace_me":
+        raise ValueError("Slack channel ID is required to post Slack messages")
+
+    message = render_gate_message(gate, response_type="in_channel")
+    payload = {
+        "channel": channel_id,
+        "text": message["text"],
+        "blocks": message["blocks"],
+    }
+    headers = {
+        "Authorization": f"Bearer {bot_token}",
+        "Content-Type": "application/json; charset=utf-8",
+    }
+    client = http_client or httpx.Client(timeout=10)
+    should_close = http_client is None
+    try:
+        response = client.post("https://slack.com/api/chat.postMessage", headers=headers, json=payload)
+        response.raise_for_status()
+        data = response.json()
+    finally:
+        if should_close:
+            client.close()
+
+    if not data.get("ok"):
+        raise RuntimeError(f"Slack chat.postMessage failed: {data.get('error')}")
+    return data
 
 
 def render_explain_message(gate: Gate) -> dict[str, Any]:
