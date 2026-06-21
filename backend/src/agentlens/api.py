@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from agentlens.analytics import build_ledger_analytics
+from agentlens.adapters.codex_cli import CodexCliAdapter
 from agentlens.config import load_settings
 from agentlens.schemas import (
     Gate,
@@ -61,6 +62,14 @@ class SlackDemoPayload(BaseModel):
     channel_id: str | None = None
 
 
+class CodexRunPayload(BaseModel):
+    prompt: str
+    repo_path: str | None = None
+    model: str | None = None
+    sandbox: str = "read-only"
+    timeout_seconds: int = 120
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -101,6 +110,32 @@ def send_demo_slack_cards(payload: SlackDemoPayload) -> dict[str, object]:
             )
             posted.append({"gate_id": gate.id, "channel": result.get("channel"), "ts": result.get("ts")})
     return {"session_id": demo.session.id, "posted": posted}
+
+
+@app.post("/codex/sessions")
+def run_codex_session(payload: CodexRunPayload) -> DemoSessionResponse:
+    repo_path = str(Path(payload.repo_path or PROJECT_ROOT))
+    session = AgentLensSession.start(
+        SessionStart(
+            original_instruction=payload.prompt,
+            repo_path=repo_path,
+        )
+    )
+    result = CodexCliAdapter().run(
+        prompt=payload.prompt,
+        session_id=session.session.id,
+        cwd=repo_path,
+        model=payload.model,
+        sandbox=payload.sandbox,
+        timeout_seconds=payload.timeout_seconds,
+    )
+    if result.returncode != 0 and not result.proposals:
+        raise HTTPException(
+            status_code=502,
+            detail=result.stderr or "Codex CLI failed before emitting tool-call proposals",
+        )
+    gates = [session.propose(proposal) for proposal in result.proposals]
+    return DemoSessionResponse(session=session.session, gates=gates, timeline=session.timeline())
 
 
 @app.post("/sessions/{session_id}/tool-calls")

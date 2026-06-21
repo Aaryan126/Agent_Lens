@@ -66,22 +66,32 @@ uv run uvicorn agentlens.api:app --reload
 
 The health endpoint is `GET http://127.0.0.1:8000/health`.
 
-6. Run the frontend approval console:
+6. Run AgentLens locally as a Codex guard:
+
+```bash
+cd backend
+uv run agentlens-guard --repo /path/to/your/repo
+```
+
+This starts a local AgentLens API at `http://127.0.0.1:8787`, stores the ledger locally,
+and keeps Codex execution on your machine.
+
+7. Run the frontend approval console against the local guard:
 
 ```bash
 cd frontend
-npm run dev
+NEXT_PUBLIC_AGENTLENS_API_URL=http://127.0.0.1:8787 npm run dev
 ```
 
 Open `http://localhost:3000`, then click **Start Supervision**. The UI starts a
-supervised AgentLens session, renders incoming Codex-style tool calls in the decision
-queue, inspector, timeline, policy ledger, Slack surface, and audit views, and lets you
-approve, block, or modify pending gates.
+local guarded Codex run, renders incoming Codex tool calls in the decision queue,
+inspector, timeline, policy ledger, Slack surface, and audit views, and lets you approve,
+block, or modify pending gates.
 
-For a real Codex-backed run, start supervision in the web console, then run the command
-shown in the empty review queue from your local checkout. It uses the Codex CLI adapter
-to execute Codex locally, parse real Codex JSON events, and post proposed tool calls into
-the hosted AgentLens session:
+For hosted judging or remote viewing, start supervision in the web console, then run the
+command shown in the empty review queue from your local checkout. It uses the Codex CLI
+adapter to execute Codex locally, parse real Codex JSON events, and post proposed tool
+calls into the hosted AgentLens session:
 
 ```bash
 cd backend
@@ -92,7 +102,7 @@ uv run agentlens-demo \
   --codex-prompt "Inspect this repo and propose the next implementation step."
 ```
 
-7. Run the simulator demo:
+8. Run the simulator demo:
 
 ```bash
 cd backend

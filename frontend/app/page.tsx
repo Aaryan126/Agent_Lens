@@ -177,6 +177,7 @@ export default function Home() {
   const resolvedCount = gates.filter((gate) => gate.status !== "pending").length;
   const trustScore = analytics ? Math.round(analytics.trust_score.score * 100) : null;
   const apiHost = API_URL.replace(/^https?:\/\//, "");
+  const localGuardMode = isLocalApi(API_URL);
 
   useEffect(() => {
     if (!demo?.session.id) return;
@@ -190,19 +191,30 @@ export default function Home() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_URL}/sessions`, {
+      const response = await fetch(localGuardMode ? `${API_URL}/codex/sessions` : `${API_URL}/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          original_instruction: codexPrompt,
-          repo_path: ".",
-        }),
+        body: JSON.stringify(
+          localGuardMode
+            ? {
+                prompt: codexPrompt,
+                repo_path: ".",
+                sandbox: "read-only",
+              }
+            : {
+                original_instruction: codexPrompt,
+                repo_path: ".",
+              },
+        ),
       });
       if (!response.ok) throw new Error(`Session failed with ${response.status}`);
-      const session = (await response.json()) as DemoResponse["session"];
+      const body = await response.json();
+      const session = (localGuardMode ? body.session : body) as DemoResponse["session"];
       window.localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, session.id);
-      setDemo({ session, gates: [], timeline: { traces: [], gates: [] } });
-      setSelectedGateId(null);
+      const nextGates = localGuardMode ? ((body.timeline?.gates ?? []) as Gate[]) : [];
+      const nextTraces = localGuardMode ? ((body.timeline?.traces ?? []) as TraceEvent[]) : [];
+      setDemo({ session, gates: nextGates, timeline: { traces: nextTraces, gates: nextGates } });
+      setSelectedGateId(nextGates.find((gate) => gate.status === "pending")?.id ?? nextGates[0]?.id ?? null);
       setAnalytics(await fetchAnalytics(session.id));
       setActiveView("review");
     } catch (err) {
@@ -386,6 +398,7 @@ export default function Home() {
                 loading={loading}
                 apiUrl={API_URL}
                 codexPrompt={codexPrompt}
+                localGuardMode={localGuardMode}
                 decisionNote={decisionNote}
                 onCreate={createDemo}
                 onSelectGate={setSelectedGateId}
@@ -433,6 +446,7 @@ function ReviewView({
   loading,
   apiUrl,
   codexPrompt,
+  localGuardMode,
   decisionNote,
   onCreate,
   onSelectGate,
@@ -449,6 +463,7 @@ function ReviewView({
   loading: boolean;
   apiUrl: string;
   codexPrompt: string;
+  localGuardMode: boolean;
   decisionNote: string;
   onCreate: () => void;
   onSelectGate: (id: string) => void;
@@ -476,6 +491,7 @@ function ReviewView({
             sessionId={demo?.session.id ?? null}
             apiUrl={apiUrl}
             codexPrompt={codexPrompt}
+            localGuardMode={localGuardMode}
           />
         ) : (
           <QueueTable
@@ -751,12 +767,14 @@ function EmptyQueue({
   sessionId,
   apiUrl,
   codexPrompt,
+  localGuardMode,
 }: {
   onCreate: () => void;
   loading: boolean;
   sessionId: string | null;
   apiUrl: string;
   codexPrompt: string;
+  localGuardMode: boolean;
 }) {
   const command = sessionId
     ? `cd backend && uv run agentlens-demo --api-url ${apiUrl} --session-id ${sessionId} --repo /path/to/your/repo --codex-prompt ${JSON.stringify(codexPrompt)}`
@@ -773,13 +791,16 @@ function EmptyQueue({
           <div>
             <p className="text-sm font-semibold">Live session is listening</p>
             <p className="mt-1 text-sm leading-6 text-neutral-600">
-              Run the adapter from your machine. It executes Codex locally, parses real Codex JSON events,
-              and posts proposed tool calls into this hosted review queue.
+              {localGuardMode
+                ? "The local guard is connected. Start Supervision runs Codex on this machine and writes events into this local ledger."
+                : "Run the adapter from your machine. It executes Codex locally, parses real Codex JSON events, and posts proposed tool calls into this hosted review queue."}
             </p>
           </div>
-          <code className="block overflow-x-auto rounded-md border border-neutral-200 bg-neutral-950 p-3 text-xs leading-6 text-neutral-100">
-            {command}
-          </code>
+          {!localGuardMode ? (
+            <code className="block overflow-x-auto rounded-md border border-neutral-200 bg-neutral-950 p-3 text-xs leading-6 text-neutral-100">
+              {command}
+            </code>
+          ) : null}
           <div className="grid gap-0 divide-y divide-neutral-100 border border-neutral-200">
             {rows.map(([risk, action, policy, note]) => (
               <div
@@ -812,7 +833,9 @@ function EmptyQueue({
       <div className="flex flex-col gap-3 border-t border-neutral-200 bg-neutral-50 px-4 py-4 md:flex-row md:items-center md:justify-between">
         <p className="text-sm text-neutral-600">
           {sessionId
-            ? "Polling for live Codex tool-call proposals."
+            ? localGuardMode
+              ? "Connected to the local guard."
+              : "Polling for live Codex tool-call proposals."
             : "Start a session to listen for Codex tool-call proposals."}
         </p>
         <button
@@ -1294,4 +1317,8 @@ function healthLabel(health: HealthState) {
   if (health === "online") return "Backend Online";
   if (health === "offline") return "Backend Offline";
   return "Checking Backend";
+}
+
+function isLocalApi(apiUrl: string) {
+  return /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?/.test(apiUrl);
 }

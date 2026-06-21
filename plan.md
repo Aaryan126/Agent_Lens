@@ -149,3 +149,24 @@ Render backend, Render Postgres, Vercel frontend, configurable CORS, PostgreSQL 
 normalization, Slack hosted interactivity, and PostgreSQL-backed runtime storage are
 implemented and live-validated. The public frontend was smoke-tested against the hosted
 backend after the operator-console redesign.
+
+## Phase 9: Local-First Guard
+
+Make AgentLens useful as a local developer tool rather than a cloud-first demo. The guard
+runs on the developer machine, starts a local API, stores the ledger locally by default,
+and executes Codex locally so repository context does not need to leave the workstation.
+
+Automatic validation:
+- Guard command imports and starts through the packaged console script.
+- `/codex/sessions` API test stubs the Codex adapter and verifies parsed proposals are gated.
+- Frontend build passes with local API mode logic.
+
+Human validation:
+- Run `uv run agentlens-guard --repo .`.
+- Start the frontend with `NEXT_PUBLIC_AGENTLENS_API_URL=http://127.0.0.1:8787 npm run dev`.
+- Submit a Codex task from the UI and confirm the local dashboard shows intercepted actions.
+
+Status: first implementation complete. `agentlens-guard` starts the local API on
+`127.0.0.1:8787`; `/codex/sessions` runs the local Codex CLI adapter and gates parsed
+tool-call proposals; the frontend detects local API mode and calls the local Codex
+endpoint instead of the hosted bridge flow.

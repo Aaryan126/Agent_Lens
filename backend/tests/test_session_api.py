@@ -2,6 +2,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from agentlens.adapters.codex_cli import CodexExecResult
 from agentlens.api import app
 from agentlens.schemas import SessionStart, ToolCallProposal
 from agentlens.session import AgentLensSession
@@ -123,3 +124,39 @@ def test_gate_decision_endpoint_resolves_pending_gate(tmp_path: Path, monkeypatc
     resolved = decision_response.json()
     assert resolved["status"] == "approved"
     assert resolved["human_reason"] == "Scoped write is acceptable."
+
+
+def test_codex_session_endpoint_runs_adapter_and_gates_proposals(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "replace_me")
+
+    def fake_run(self, **kwargs):
+        return CodexExecResult(
+            returncode=0,
+            stdout="",
+            stderr="",
+            proposals=[
+                ToolCallProposal(
+                    session_id=kwargs["session_id"],
+                    tool_name="fs.read",
+                    params={"path": "prd.md"},
+                    stated_reason="Need requirements context.",
+                )
+            ],
+        )
+
+    monkeypatch.setattr("agentlens.api.CodexCliAdapter.run", fake_run)
+    client = TestClient(app)
+
+    response = client.post(
+        "/codex/sessions",
+        json={
+            "prompt": "Inspect the PRD.",
+            "repo_path": str(tmp_path),
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["session"]["original_instruction"] == "Inspect the PRD."
+    assert body["timeline"]["traces"][0]["tool_name"] == "fs.read"
+    assert body["gates"][0]["status"] == "auto_executed"
