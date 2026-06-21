@@ -46,6 +46,7 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 - Render backend `/health` passed, Vercel production deploy passed, and hosted CORS preflight passed for the Vercel frontend origin.
 - Hosted Render Postgres is provisioned: `agentlens-db` (`dpg-d8rtkbe7r5hc73epfmpg-a`), free plan, Singapore region, expires on July 21, 2026.
 - Hosted backend now runs with `AGENTLENS_STORAGE_BACKEND=postgres`; hosted demo session creation passed, audit events were present after a Render service restart, confirming persisted runtime state.
+- Hosted Slack validation passed after deploying explicit `chat.update` handling: Slack Approve / Block / Modify clicks reach the hosted backend, update persisted gate state, and visually replace the Slack message with resolved status/buttons removed.
 
 ## Known Gaps
 
@@ -55,7 +56,6 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 
 ## Next Steps
 
-1. Update Slack Interactivity to the hosted backend URL and repeat the live button test.
-2. Warm `https://agentlens-api-ggkh.onrender.com/health` before judging because Render free web services sleep after idle.
-3. Renew or upgrade Render Postgres before July 21, 2026 if the demo must remain live.
-4. Review the frontend npm audit finding before forcing dependency changes; the available audit fix is breaking.
+1. Warm `https://agentlens-api-ggkh.onrender.com/health` before judging because Render free web services sleep after idle.
+2. Renew or upgrade Render Postgres before July 21, 2026 if the demo must remain live.
+3. Review the frontend npm audit finding before forcing dependency changes; the available audit fix is breaking.
