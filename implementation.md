@@ -51,6 +51,8 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 - Production Vercel smoke passed after the redesign: backend status rendered online, Create Session loaded 3 decision cards, analytics rendered, and no horizontal overflow was detected at 1440px width.
 - Final frontend polish pass replaced the marketing-style demo page with a production-style operator console: persistent dark sidebar, compact topbar controls, status metrics, decision queue table, right-side inspector, timeline, and ledger analytics.
 - The frontend revamp is deployed at `https://frontend-ashy-mu-csvn2wfbmk.vercel.app` and was smoke-tested against the hosted Render backend: backend status rendered online, `Run Demo Session` created a real session, queue/inspector/analytics populated, and no horizontal overflow was detected at 1440px desktop or 390px mobile widths.
+- The hosted console main workspace was tightened again for production presentation: controlled max width, compact metric cards, aligned review grid, smaller inspector empty state, and working sidebar sections for Trajectory, Policy Ledger, Slack Surface, and Audit Events.
+- Latest hosted smoke passed: every sidebar section switched content, `Run Demo Session` populated real hosted backend data, and no horizontal overflow was detected on desktop or mobile.
 
 ## Known Gaps
 

@@ -74,8 +74,8 @@ npm run dev
 ```
 
 Open `http://localhost:3000`, then click **Run Demo Session**. The UI creates a demo
-session, renders the decision queue, inspector, timeline, and ledger analytics, and lets
-you approve, block, or modify pending gates.
+session, renders the decision queue, inspector, timeline, policy ledger, Slack surface,
+and audit views, and lets you approve, block, or modify pending gates.
 
 7. Run the simulator demo:
 
