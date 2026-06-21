@@ -47,6 +47,8 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 - Hosted Render Postgres is provisioned: `agentlens-db` (`dpg-d8rtkbe7r5hc73epfmpg-a`), free plan, Singapore region, expires on July 21, 2026.
 - Hosted backend now runs with `AGENTLENS_STORAGE_BACKEND=postgres`; hosted demo session creation passed, audit events were present after a Render service restart, confirming persisted runtime state.
 - Hosted Slack validation passed after deploying explicit `chat.update` handling: Slack Approve / Block / Modify clicks reach the hosted backend, update persisted gate state, and visually replace the Slack message with resolved status/buttons removed.
+- Hosted frontend was redesigned from a minimal validation shell into a richer command-center demo with runtime status, hosted Slack send controls, proof points, richer decision cards, analytics, timeline, and a meaningful empty state.
+- Production Vercel smoke passed after the redesign: backend status rendered online, Create Session loaded 3 decision cards, analytics rendered, and no horizontal overflow was detected at 1440px width.
 
 ## Known Gaps
 
