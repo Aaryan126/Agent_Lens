@@ -339,20 +339,7 @@ export default function Home() {
                 </p>
               </div>
 
-              <div className="grid gap-2 lg:grid-cols-[minmax(320px,440px)_160px_170px_120px]">
-                <input
-                  value={codexPrompt}
-                  onChange={(event) => setCodexPrompt(event.target.value)}
-                  className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium outline-none focus:border-neutral-950"
-                  aria-label="Codex task"
-                />
-                <button
-                  onClick={createDemo}
-                  disabled={loading}
-                  className="h-10 whitespace-nowrap rounded-md bg-neutral-950 px-4 text-sm font-semibold text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-400"
-                >
-                  {loading ? "Starting Session" : "Start Supervision"}
-                </button>
+              <div className="grid gap-2 sm:grid-cols-[170px_120px]">
                 <input
                   value={slackChannel}
                   onChange={(event) => setSlackChannel(event.target.value)}
@@ -380,6 +367,14 @@ export default function Home() {
               </Notice>
             ) : null}
 
+            <TaskComposer
+              value={codexPrompt}
+              loading={loading}
+              localGuardMode={localGuardMode}
+              onChange={setCodexPrompt}
+              onStart={createDemo}
+            />
+
             <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
               <Metric label="Session" value={demo ? demo.session.id.slice(0, 13) : "Idle"} />
               <Metric label="Trace Events" value={String(traces.length)} />
@@ -395,12 +390,10 @@ export default function Home() {
                 traces={traces}
                 selectedGate={selectedGate}
                 traceByProposal={traceByProposal}
-                loading={loading}
                 apiUrl={API_URL}
                 codexPrompt={codexPrompt}
                 localGuardMode={localGuardMode}
                 decisionNote={decisionNote}
-                onCreate={createDemo}
                 onSelectGate={setSelectedGateId}
                 onDecisionNote={setDecisionNote}
                 onDecision={decide}
@@ -443,12 +436,10 @@ function ReviewView({
   traces,
   selectedGate,
   traceByProposal,
-  loading,
   apiUrl,
   codexPrompt,
   localGuardMode,
   decisionNote,
-  onCreate,
   onSelectGate,
   onDecisionNote,
   onDecision,
@@ -460,12 +451,10 @@ function ReviewView({
   traces: TraceEvent[];
   selectedGate: Gate | null;
   traceByProposal: Map<string, TraceEvent>;
-  loading: boolean;
   apiUrl: string;
   codexPrompt: string;
   localGuardMode: boolean;
   decisionNote: string;
-  onCreate: () => void;
   onSelectGate: (id: string) => void;
   onDecisionNote: (value: string) => void;
   onDecision: (gate: Gate, action: "approve" | "block" | "modify") => Promise<void>;
@@ -486,8 +475,6 @@ function ReviewView({
         />
         {gates.length === 0 ? (
           <EmptyQueue
-            onCreate={onCreate}
-            loading={loading}
             sessionId={demo?.session.id ?? null}
             apiUrl={apiUrl}
             codexPrompt={codexPrompt}
@@ -514,6 +501,56 @@ function ReviewView({
         onDecisionNote={onDecisionNote}
         onDecision={onDecision}
       />
+    </section>
+  );
+}
+
+function TaskComposer({
+  value,
+  loading,
+  localGuardMode,
+  onChange,
+  onStart,
+}: {
+  value: string;
+  loading: boolean;
+  localGuardMode: boolean;
+  onChange: (value: string) => void;
+  onStart: () => void;
+}) {
+  return (
+    <section className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_180px] xl:items-end">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Codex Task</p>
+            <Badge label={localGuardMode ? "Local Guard" : "Hosted Bridge"} tone="neutral" />
+          </div>
+          <label className="sr-only" htmlFor="codex-task">
+            Codex task
+          </label>
+          <textarea
+            id="codex-task"
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            rows={3}
+            className="mt-3 w-full resize-none rounded-md border border-neutral-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-neutral-950"
+            placeholder="Ask Codex to inspect, implement, refactor, or verify something in this repo."
+          />
+          <p className="mt-2 text-xs leading-5 text-neutral-500">
+            {localGuardMode
+              ? "Runs Codex on this Mac through agentlens-guard, then gates risky tool calls locally."
+              : "Creates a hosted review session and shows the local adapter command for forwarding Codex events."}
+          </p>
+        </div>
+        <button
+          onClick={onStart}
+          disabled={loading || !value.trim()}
+          className="h-11 whitespace-nowrap rounded-md bg-neutral-950 px-4 text-sm font-semibold text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-400"
+        >
+          {loading ? "Starting Session" : "Start Supervision"}
+        </button>
+      </div>
     </section>
   );
 }
@@ -762,15 +799,11 @@ function QueueTable({
 }
 
 function EmptyQueue({
-  onCreate,
-  loading,
   sessionId,
   apiUrl,
   codexPrompt,
   localGuardMode,
 }: {
-  onCreate: () => void;
-  loading: boolean;
   sessionId: string | null;
   apiUrl: string;
   codexPrompt: string;
@@ -830,7 +863,7 @@ function EmptyQueue({
           ))}
         </div>
       )}
-      <div className="flex flex-col gap-3 border-t border-neutral-200 bg-neutral-50 px-4 py-4 md:flex-row md:items-center md:justify-between">
+      <div className="border-t border-neutral-200 bg-neutral-50 px-4 py-4">
         <p className="text-sm text-neutral-600">
           {sessionId
             ? localGuardMode
@@ -838,13 +871,6 @@ function EmptyQueue({
               : "Polling for live Codex tool-call proposals."
             : "Start a session to listen for Codex tool-call proposals."}
         </p>
-        <button
-          onClick={onCreate}
-          disabled={loading}
-          className="h-10 rounded-md bg-neutral-950 px-4 text-sm font-semibold text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-400"
-        >
-          {loading ? "Starting Session" : sessionId ? "New Session" : "Start Supervision"}
-        </button>
       </div>
     </div>
   );
