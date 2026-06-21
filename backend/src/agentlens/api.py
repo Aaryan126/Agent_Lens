@@ -1,20 +1,38 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from agentlens.schemas import Gate, GateStatus, SessionStart, Timeline, ToolCallProposal
+from agentlens.schemas import Gate, GateStatus, Session, SessionStart, Timeline, ToolCallProposal
 from agentlens.session import AgentLensSession
+from agentlens.simulator import default_demo_proposals
 from agentlens.storage import store
 
 app = FastAPI(title="AgentLens", version="0.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 class DecisionPayload(BaseModel):
     reason: str | None = None
     modified_instruction: str | None = None
+
+
+class DemoSessionResponse(BaseModel):
+    session: Session
+    gates: list[Gate]
+    timeline: Timeline
 
 
 @app.get("/health")
@@ -26,6 +44,20 @@ def health() -> dict[str, str]:
 def create_session(payload: SessionStart):
     session = AgentLensSession.start(payload)
     return session.session
+
+
+@app.post("/demo/session")
+def create_demo_session() -> DemoSessionResponse:
+    session = AgentLensSession.start(
+        SessionStart(
+            original_instruction=(
+                "Implement AgentLens safely and ask for approval before risky actions."
+            ),
+            repo_path=str(PROJECT_ROOT),
+        )
+    )
+    gates = [session.propose(proposal) for proposal in default_demo_proposals(session.session.id)]
+    return DemoSessionResponse(session=session.session, gates=gates, timeline=session.timeline())
 
 
 @app.post("/sessions/{session_id}/tool-calls")
@@ -90,4 +122,3 @@ def _resolve_gate(gate_id: str, status: GateStatus, payload: DecisionPayload) ->
     gate.modified_instruction = payload.modified_instruction
     gate.resolved_at = datetime.now(UTC)
     return store.update_gate(gate)
-

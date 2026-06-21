@@ -72,8 +72,8 @@ Automatic validation:
 Human validation:
 - Approve/block/modify at least 3 demo actions locally.
 
-Status: complete for baseline local API endpoints and CLI demo output. Human-facing local
-approval UX can still be improved before Slack.
+Status: complete for local demo review. The Next.js UI can create a demo session, render
+decision cards, and approve/block/modify pending gates through the FastAPI backend.
 
 ## Phase 5: Slack Approval Surface
 
@@ -101,7 +101,8 @@ Automatic validation:
 Human validation:
 - Replay one full demo session.
 
-Status: shell only.
+Status: partially complete. The same UI now shows a compact timeline for the local demo,
+but analytics views are not implemented yet.
 
 ## Phase 7: Codex Adapter and Competition Polish
 

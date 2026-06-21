@@ -48,6 +48,11 @@ class InMemoryStore:
             gates = [gate for gate in self.gates.values() if gate.session_id == session_id]
         return traces, gates
 
+    def clear(self) -> None:
+        with self._lock:
+            self.sessions.clear()
+            self.traces.clear()
+            self.gates.clear()
+
 
 store = InMemoryStore()
-

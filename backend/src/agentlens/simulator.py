@@ -32,10 +32,16 @@ def default_demo_proposals(session_id: str) -> list[ToolCallProposal]:
         ),
         ToolCallProposal(
             session_id=session_id,
+            tool_name="fs.write",
+            params={"path": "backend/src/agentlens/session.py"},
+            stated_reason="Add session orchestration for intercepted tool calls.",
+            confidence=0.86,
+        ),
+        ToolCallProposal(
+            session_id=session_id,
             tool_name="fs.delete",
             params={"path": "backend/migrations/001_sessions.py"},
             stated_reason="Migration appears redundant.",
             confidence=0.58,
         ),
     ]
-

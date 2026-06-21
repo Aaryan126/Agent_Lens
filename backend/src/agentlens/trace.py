@@ -5,6 +5,8 @@ from pathlib import Path
 
 from agentlens.schemas import GitSnapshot, ToolCallProposal, TraceEvent
 
+MAX_GIT_SNAPSHOT_CHARS = 12_000
+
 
 class TraceEngine:
     def capture(self, proposal: ToolCallProposal, repo_path: str) -> TraceEvent:
@@ -45,5 +47,12 @@ class TraceEngine:
         if status.returncode != 0:
             return GitSnapshot(available=False, error=status.stderr.strip() or "git unavailable")
 
-        return GitSnapshot(status_short=status.stdout, diff=diff.stdout)
+        return GitSnapshot(
+            status_short=self._truncate(status.stdout),
+            diff=self._truncate(diff.stdout),
+        )
 
+    def _truncate(self, value: str) -> str:
+        if len(value) <= MAX_GIT_SNAPSHOT_CHARS:
+            return value
+        return f"{value[:MAX_GIT_SNAPSHOT_CHARS]}\n...[truncated]"

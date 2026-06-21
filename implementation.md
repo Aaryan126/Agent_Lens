@@ -16,6 +16,9 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 - Gated actions now build live OpenAI intelligence cards with trajectory prediction, embedding-based drift detection, calibrated confidence, and two-sentence translation.
 - Auto-executed safe actions keep a lightweight deterministic ledger card to avoid unnecessary model calls.
 - Frontend dependencies install and the Next.js ledger shell builds successfully.
+- Local review UI can create a demo session through `POST /demo/session`, render decision cards, and approve/block/modify pending gates.
+- Browser smoke verified the local UI: demo loads, `fs.delete` trace renders, approving a pending gate updates statuses to `AUTO EXECUTED`, `APPROVED`, and `PENDING`.
+- Git snapshots are truncated at 12,000 characters in the initial trace engine to keep local UI/API payloads usable.
 
 ## Known Gaps
 
@@ -27,6 +30,6 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 ## Next Steps
 
 1. Review the frontend npm audit finding before forcing dependency changes; the available audit fix is breaking.
-2. Expand persistence from in-memory to PostgreSQL when the API contract stabilizes.
-3. Implement Slack Block Kit approvals after the local gate flow is stable.
-4. Improve the local approval UX so pending gates are easy to review without reading raw JSON.
+2. Implement Slack Block Kit approvals using the now-stable decision-card shape.
+3. Expand persistence from in-memory to PostgreSQL when the API contract stabilizes.
+4. Add ledger analytics views for approval patterns, drift history, and trust score.

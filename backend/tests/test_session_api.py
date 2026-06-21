@@ -53,3 +53,44 @@ def test_health_endpoint() -> None:
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_demo_session_endpoint_creates_reviewable_gates(monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "replace_me")
+    client = TestClient(app)
+    response = client.post("/demo/session")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["session"]["id"].startswith("ses_")
+    assert body["gates"]
+    assert body["timeline"]["traces"]
+
+
+def test_gate_decision_endpoint_resolves_pending_gate(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "replace_me")
+    client = TestClient(app)
+    session_response = client.post(
+        "/sessions",
+        json={"original_instruction": "Review writes.", "repo_path": str(tmp_path)},
+    )
+    session_id = session_response.json()["id"]
+    proposal_response = client.post(
+        f"/sessions/{session_id}/tool-calls",
+        json={
+            "session_id": session_id,
+            "tool_name": "fs.write",
+            "params": {"path": "notes.md"},
+            "confidence": 0.8,
+        },
+    )
+    gate = proposal_response.json()
+    assert gate["status"] == "pending"
+
+    decision_response = client.post(
+        f"/gates/{gate['id']}/approve",
+        json={"reason": "Scoped write is acceptable."},
+    )
+    assert decision_response.status_code == 200
+    resolved = decision_response.json()
+    assert resolved["status"] == "approved"
+    assert resolved["human_reason"] == "Scoped write is acceptable."
