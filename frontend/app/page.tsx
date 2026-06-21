@@ -227,35 +227,40 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f6f7f5] text-neutral-950">
-      <section className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-5 py-6 lg:px-8">
-        <header className="grid gap-5 border-b border-neutral-200 pb-6 lg:grid-cols-[1fr_420px] lg:items-end">
-          <div>
+    <main className="min-h-screen bg-[#f3f3f1] text-neutral-950">
+      <section className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-5 pb-8 lg:px-8">
+        <header className="-mx-5 grid gap-6 bg-neutral-950 px-5 py-6 text-white lg:-mx-8 lg:grid-cols-[minmax(0,1fr)_430px] lg:px-8">
+          <div className="flex min-w-0 flex-col justify-between gap-6">
             <div className="flex flex-wrap items-center gap-2">
-              <Pill label="AgentLens Command Center" tone="green" />
+              <Pill label="AgentLens" tone="dark" />
               <Pill label="Hosted Demo" tone="blue" />
               <Pill label={healthLabel(health)} tone={health === "online" ? "green" : "amber"} />
             </div>
-            <h1 className="mt-4 max-w-4xl text-4xl font-semibold leading-tight tracking-normal md:text-5xl">
-              Supervise coding agents before risky tool calls become irreversible changes.
-            </h1>
-            <div className="mt-5 grid gap-3 text-sm text-neutral-700 md:grid-cols-3">
-              <ProofPoint label="OpenAI intelligence" value="Trajectory, drift, confidence" />
-              <ProofPoint label="Slack approvals" value="Live buttons, message updates" />
-              <ProofPoint label="Postgres ledger" value="State survives service restart" />
+            <div>
+              <p className="text-xs font-semibold uppercase text-neutral-400">
+                AI Agent Supervision Console
+              </p>
+              <h1 className="mt-3 max-w-4xl text-4xl font-semibold leading-tight md:text-5xl">
+                Review risky agent actions before they change production code.
+              </h1>
+            </div>
+            <div className="grid gap-3 text-sm md:grid-cols-3">
+              <ProofPoint label="Intelligence" value="Trajectory, drift, confidence" />
+              <ProofPoint label="Approval Surface" value="Slack and console decisions" />
+              <ProofPoint label="Audit Ledger" value="Postgres-backed history" />
             </div>
           </div>
 
-          <section className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
+          <section className="self-end border border-neutral-800 bg-neutral-900 p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-neutral-900">Demo controls</p>
-                <p className="mt-1 text-xs text-neutral-500">{apiHost}</p>
+                <p className="text-sm font-semibold">Demo Controls</p>
+                <p className="mt-1 truncate text-xs text-neutral-400">{apiHost}</p>
               </div>
               <button
                 onClick={createDemo}
                 disabled={loading}
-                className="h-10 shrink-0 rounded-md bg-neutral-950 px-4 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-400"
+                className="h-10 shrink-0 rounded-md bg-white px-4 text-sm font-semibold text-neutral-950 transition hover:bg-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-600 disabled:text-neutral-300"
               >
                 {loading ? "Analyzing..." : "Create Session"}
               </button>
@@ -265,19 +270,19 @@ export default function Home() {
               <input
                 value={slackChannel}
                 onChange={(event) => setSlackChannel(event.target.value)}
-                className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm outline-none focus:border-neutral-950"
+                className="h-10 rounded-md border border-neutral-700 bg-neutral-950 px-3 text-sm text-white outline-none focus:border-white"
                 aria-label="Slack channel ID"
               />
               <button
                 onClick={sendSlackCards}
                 disabled={slackLoading}
-                className="h-10 rounded-md border border-neutral-300 px-4 text-sm font-semibold text-neutral-800 hover:border-neutral-950 disabled:cursor-not-allowed disabled:text-neutral-400"
+                className="h-10 rounded-md border border-neutral-700 px-4 text-sm font-semibold text-white hover:border-white disabled:cursor-not-allowed disabled:text-neutral-500"
               >
                 {slackLoading ? "Sending..." : "Send Slack Cards"}
               </button>
             </div>
             {slackResult ? (
-              <div className="mt-3 rounded-md bg-sky-50 px-3 py-2 text-xs text-sky-900">
+              <div className="mt-3 border border-sky-800 bg-sky-950/40 px-3 py-2 text-xs text-sky-100">
                 Posted {slackResult.posted.length} card
                 {slackResult.posted.length === 1 ? "" : "s"} for{" "}
                 {slackResult.session_id.slice(0, 12)}.
@@ -306,11 +311,12 @@ export default function Home() {
 
         <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_390px]">
           <div className="flex flex-col gap-5">
-            <section className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
-              <div className="flex flex-col gap-3 border-b border-neutral-100 pb-4 md:flex-row md:items-center md:justify-between">
+            <section>
+              <div className="flex flex-col gap-3 border-b border-neutral-300 pb-4 md:flex-row md:items-end md:justify-between">
                 <div>
-                  <h2 className="text-xl font-semibold">Decision Queue</h2>
-                  <p className="mt-1 text-sm text-neutral-500">
+                  <p className="text-xs font-semibold uppercase text-neutral-500">Live Review</p>
+                  <h2 className="mt-1 text-2xl font-semibold">Decision Queue</h2>
+                  <p className="mt-1 max-w-2xl text-sm text-neutral-600">
                     {demo
                       ? demo.session.original_instruction
                       : "Safe reads, gated writes, and destructive migration attempts are staged for review."}
@@ -319,7 +325,7 @@ export default function Home() {
                 <input
                   value={decisionNote}
                   onChange={(event) => setDecisionNote(event.target.value)}
-                  className="h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm outline-none focus:border-neutral-950 md:w-96"
+                  className="h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm outline-none focus:border-neutral-950 md:w-[430px]"
                   aria-label="Decision note"
                 />
               </div>
@@ -364,12 +370,40 @@ function healthLabel(health: HealthState) {
   return "Checking Backend";
 }
 
-function Pill({ label, tone }: { label: string; tone: "green" | "blue" | "amber" | "neutral" }) {
+function titleCase(value: string) {
+  return value
+    .replace(/[_.]/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function toolLabel(value: string | undefined) {
+  const labels: Record<string, string> = {
+    "fs.read": "File Read",
+    "fs.write": "File Write",
+    "fs.delete": "File Delete",
+    "shell.run": "Shell Command",
+    "db.query": "Database Query",
+    "api.call": "API Call",
+  };
+  return value ? (labels[value] ?? titleCase(value)) : "Tool Call";
+}
+
+function Pill({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: "green" | "blue" | "amber" | "neutral" | "dark";
+}) {
   const styles = {
-    green: "border-emerald-200 bg-emerald-50 text-emerald-800",
-    blue: "border-sky-200 bg-sky-50 text-sky-800",
-    amber: "border-amber-200 bg-amber-50 text-amber-800",
+    green: "border-emerald-400/50 bg-emerald-400/10 text-emerald-100",
+    blue: "border-sky-400/50 bg-sky-400/10 text-sky-100",
+    amber: "border-amber-400/50 bg-amber-400/10 text-amber-100",
     neutral: "border-neutral-200 bg-white text-neutral-700",
+    dark: "border-neutral-700 bg-neutral-900 text-white",
   };
   return (
     <span className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase ${styles[tone]}`}>
@@ -380,9 +414,9 @@ function Pill({ label, tone }: { label: string; tone: "green" | "blue" | "amber"
 
 function ProofPoint({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-neutral-200 bg-white px-3 py-2">
+    <div className="border border-neutral-800 bg-neutral-900 px-3 py-2">
       <p className="text-xs font-semibold uppercase text-neutral-500">{label}</p>
-      <p className="mt-1 font-medium text-neutral-900">{value}</p>
+      <p className="mt-1 font-medium text-neutral-100">{value}</p>
     </div>
   );
 }
@@ -398,13 +432,13 @@ function Metric({
 }) {
   const accentStyles = {
     neutral: "border-neutral-200",
-    green: "border-emerald-200",
-    sky: "border-sky-200",
-    red: "border-red-200",
+    green: "border-emerald-300",
+    sky: "border-sky-300",
+    red: "border-red-300",
   };
   return (
     <div className={`rounded-lg border bg-white p-4 shadow-sm ${accentStyles[accent]}`}>
-      <p className="text-sm text-neutral-500">{label}</p>
+      <p className="text-xs font-semibold uppercase text-neutral-500">{label}</p>
       <p className="mt-2 truncate text-2xl font-semibold">{value}</p>
     </div>
   );
@@ -413,12 +447,13 @@ function Metric({
 function SystemPanel({ health }: { health: HealthState }) {
   return (
     <section className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
-      <h2 className="text-lg font-semibold">Runtime Status</h2>
+      <p className="text-xs font-semibold uppercase text-neutral-500">Infrastructure</p>
+      <h2 className="mt-1 text-lg font-semibold">Runtime Status</h2>
       <div className="mt-4 flex flex-col gap-3">
         <StatusRow label="Backend API" value={healthLabel(health)} ok={health === "online"} />
-        <StatusRow label="OpenAI layer" value="Structured outputs enabled" ok />
-        <StatusRow label="Slack surface" value="Hosted interactivity live" ok />
-        <StatusRow label="Ledger store" value="Render Postgres attached" ok />
+        <StatusRow label="OpenAI Layer" value="Structured Outputs Enabled" ok />
+        <StatusRow label="Slack Surface" value="Hosted Interactivity Live" ok />
+        <StatusRow label="Ledger Store" value="Render Postgres Attached" ok />
       </div>
     </section>
   );
@@ -445,14 +480,15 @@ function AnalyticsPanel({ analytics }: { analytics: LedgerAnalytics | null }) {
     <section className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Ledger Analytics</h2>
+          <p className="text-xs font-semibold uppercase text-neutral-500">Audit Intelligence</p>
+          <h2 className="mt-1 text-lg font-semibold">Ledger Analytics</h2>
           <p className="mt-1 text-sm text-neutral-500">
-            {analytics ? `${analytics.trust_score.total_actions} actions recorded` : "Awaiting session"}
+            {analytics ? `${analytics.trust_score.total_actions} Actions Recorded` : "Awaiting Session"}
           </p>
         </div>
         <div className="text-right">
           <p className="text-2xl font-semibold">{analytics ? `${trust}%` : "--"}</p>
-          <p className="text-xs uppercase text-neutral-500">trust</p>
+          <p className="text-xs uppercase text-neutral-500">Trust</p>
         </div>
       </div>
 
@@ -511,7 +547,7 @@ function BucketList({ title, buckets }: { title: string; buckets: CountBucket[] 
         ) : (
           buckets.map((bucket) => (
             <div key={bucket.name} className="flex items-center justify-between text-sm">
-              <span className="capitalize text-neutral-600">{bucket.name.replace("_", " ")}</span>
+              <span className="text-neutral-600">{titleCase(bucket.name)}</span>
               <span className="rounded bg-neutral-100 px-2 py-0.5 font-semibold">
                 {bucket.count}
               </span>
@@ -526,7 +562,8 @@ function BucketList({ title, buckets }: { title: string; buckets: CountBucket[] 
 function TimelinePanel({ traces }: { traces: TraceEvent[] }) {
   return (
     <section className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
-      <h2 className="text-lg font-semibold">Execution Timeline</h2>
+      <p className="text-xs font-semibold uppercase text-neutral-500">Trace Capture</p>
+      <h2 className="mt-1 text-lg font-semibold">Execution Timeline</h2>
       <div className="mt-4 flex flex-col gap-3">
         {traces.length === 0 ? (
           <div className="rounded-md bg-neutral-50 px-3 py-3 text-sm text-neutral-500">
@@ -537,7 +574,7 @@ function TimelinePanel({ traces }: { traces: TraceEvent[] }) {
             <div key={trace.id} className="rounded-md border border-neutral-100 bg-neutral-50 p-3">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-xs font-semibold uppercase text-neutral-500">Step {index + 1}</p>
-                <p className="text-xs text-neutral-500">{trace.tool_name}</p>
+                <p className="text-xs text-neutral-500">{toolLabel(trace.tool_name)}</p>
               </div>
               <p className="mt-2 text-sm font-medium">{trace.stated_reason}</p>
               <code className="mt-2 block overflow-x-auto rounded bg-white p-2 text-xs text-neutral-700">
@@ -555,17 +592,17 @@ function EmptyState({ onCreate, loading }: { onCreate: () => void; loading: bool
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <PreviewCard
-        title="1. Safe inspection"
+        title="Safe Inspection"
         risk="low"
         body="Read-only calls pass automatically and still enter the ledger."
       />
       <PreviewCard
-        title="2. Gated write"
+        title="Gated Write"
         risk="medium"
         body="Code changes get trajectory, confidence, drift, and approval controls."
       />
       <PreviewCard
-        title="3. Destructive action"
+        title="Destructive Action"
         risk="critical"
         body="Migration deletes are blocked and preserved as auditable decisions."
       />
@@ -593,7 +630,9 @@ function EmptyState({ onCreate, loading }: { onCreate: () => void; loading: bool
 function PreviewCard({ title, risk, body }: { title: string; risk: RiskLevel; body: string }) {
   return (
     <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
-      <Pill label={risk} tone={risk === "low" ? "green" : risk === "medium" ? "amber" : "neutral"} />
+      <span className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase ${riskStyles[risk]}`}>
+        {risk}
+      </span>
       <p className="mt-4 font-semibold">{title}</p>
       <p className="mt-2 text-sm leading-6 text-neutral-600">{body}</p>
     </div>
@@ -625,21 +664,21 @@ function DecisionCard({
               {risk}
             </span>
             <span
-              className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase ${statusStyles[gate.status]}`}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusStyles[gate.status]}`}
             >
-              {gate.status.replace("_", " ")}
+              {titleCase(gate.status)}
             </span>
             <span className="rounded-full border border-neutral-200 px-3 py-1 text-xs font-semibold uppercase text-neutral-600">
               {confidence}% confidence
             </span>
           </div>
           <h3 className="mt-3 text-xl font-semibold">
-            {trace?.tool_name ?? "tool call"} on{" "}
+            {toolLabel(trace?.tool_name)} on{" "}
             {gate.risk_assessment.affected_files[0] ?? "external state"}
           </h3>
         </div>
-        <p className="rounded-md bg-neutral-50 px-3 py-2 text-sm text-neutral-600">
-          {gate.policy_decision.action.replace("_", " ")}
+        <p className="rounded-md bg-neutral-950 px-3 py-2 text-sm font-medium text-white">
+          {titleCase(gate.policy_decision.action)}
         </p>
       </div>
 
@@ -648,9 +687,12 @@ function DecisionCard({
       </p>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-3">
-        <Fact label="Reversibility" value={gate.risk_assessment.reversibility} />
-        <Fact label="Blast radius" value={gate.risk_assessment.blast_radius} />
-        <Fact label="Policy source" value={gate.policy_decision.matched_policy ?? "semantic risk"} />
+        <Fact label="Reversibility" value={titleCase(gate.risk_assessment.reversibility)} />
+        <Fact label="Blast Radius" value={titleCase(gate.risk_assessment.blast_radius)} />
+        <Fact
+          label="Policy Source"
+          value={titleCase(gate.policy_decision.matched_policy ?? "semantic risk")}
+        />
       </div>
 
       <section className="mt-4 grid gap-3 lg:grid-cols-2">
@@ -686,14 +728,14 @@ function DecisionCard({
         <button
           onClick={() => onDecision(gate, "approve")}
           disabled={disabled}
-          className="h-10 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-neutral-300"
+          className="h-10 rounded-md bg-neutral-950 px-4 text-sm font-semibold text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500"
         >
           Approve
         </button>
         <button
           onClick={() => onDecision(gate, "block")}
           disabled={disabled}
-          className="h-10 rounded-md bg-red-700 px-4 text-sm font-semibold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-neutral-300"
+          className="h-10 rounded-md border border-red-700 px-4 text-sm font-semibold text-red-800 hover:bg-red-50 disabled:cursor-not-allowed disabled:border-neutral-200 disabled:text-neutral-400"
         >
           Block
         </button>
