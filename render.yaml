@@ -1,7 +1,7 @@
 services:
   - type: web
     name: agentlens-api
-    env: docker
+    runtime: docker
     plan: free
     dockerContext: ./backend
     dockerfilePath: ./backend/Dockerfile
