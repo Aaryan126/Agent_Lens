@@ -49,7 +49,8 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 - Hosted Slack validation passed after deploying explicit `chat.update` handling: Slack Approve / Block / Modify clicks reach the hosted backend, update persisted gate state, and visually replace the Slack message with resolved status/buttons removed.
 - Hosted frontend was redesigned from a minimal validation shell into a richer command-center demo with runtime status, hosted Slack send controls, proof points, richer decision cards, analytics, timeline, and a meaningful empty state.
 - Production Vercel smoke passed after the redesign: backend status rendered online, Create Session loaded 3 decision cards, analytics rendered, and no horizontal overflow was detected at 1440px width.
-- Final frontend polish pass added a darker premium command-console header, tighter operational layout, consistent Title Case labels for tools/statuses/actions, cleaner decision card hierarchy, and a more restrained monochrome/industrial visual style.
+- Final frontend polish pass replaced the marketing-style demo page with a production-style operator console: persistent dark sidebar, compact topbar controls, status metrics, decision queue table, right-side inspector, timeline, and ledger analytics.
+- The frontend revamp is deployed at `https://frontend-ashy-mu-csvn2wfbmk.vercel.app` and was smoke-tested against the hosted Render backend: backend status rendered online, `Run Demo Session` created a real session, queue/inspector/analytics populated, and no horizontal overflow was detected at 1440px desktop or 390px mobile widths.
 
 ## Known Gaps
 

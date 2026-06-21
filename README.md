@@ -7,7 +7,7 @@ The first build is local-first: a simulator emits tool-call proposals through th
 ## Current Architecture
 
 - `backend/`: Python SDK and FastAPI service.
-- `frontend/`: Next.js ledger shell.
+- `frontend/`: Next.js hosted approval console.
 - `examples/`: sample sessions and configs for local demos.
 - `plan.md`: phased build and validation checklist.
 - `implementation.md`: latest implementation status.
@@ -66,15 +66,16 @@ uv run uvicorn agentlens.api:app --reload
 
 The health endpoint is `GET http://127.0.0.1:8000/health`.
 
-6. Run the frontend review UI:
+6. Run the frontend approval console:
 
 ```bash
 cd frontend
 npm run dev
 ```
 
-Open `http://localhost:3000`, then click **Create Demo Session**. The UI creates a local
-demo session, renders decision cards, and lets you approve, block, or modify pending gates.
+Open `http://localhost:3000`, then click **Run Demo Session**. The UI creates a demo
+session, renders the decision queue, inspector, timeline, and ledger analytics, and lets
+you approve, block, or modify pending gates.
 
 7. Run the simulator demo:
 
@@ -129,7 +130,7 @@ With `OPENAI_API_KEY` configured, gated demo actions produce live trajectory, dr
 confidence, and translation output. Auto-executed low-risk actions use a lightweight
 ledger card to avoid unnecessary model calls.
 
-The local review UI uses `POST /demo/session` to create a sample session and decision
+The review console uses `POST /demo/session` to create a sample session and decision
 endpoints under `/gates/{id}` to approve, block, or modify pending gates.
 
 The ledger also calls `GET /sessions/{id}/analytics` to show:

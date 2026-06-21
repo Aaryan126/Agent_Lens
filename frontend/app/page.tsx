@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_AGENTLENS_API_URL ?? "http://127.0.0.1:8000";
 const DEFAULT_SLACK_CHANNEL = "C0BBW328TEF";
@@ -92,67 +92,58 @@ type SlackSendResult = {
   posted: { gate_id: string; channel: string; ts: string }[];
 };
 
-const riskStyles: Record<RiskLevel, string> = {
-  low: "border-emerald-200 bg-emerald-50 text-emerald-800",
-  medium: "border-amber-200 bg-amber-50 text-amber-900",
-  high: "border-rose-200 bg-rose-50 text-rose-800",
-  critical: "border-red-300 bg-red-100 text-red-950",
+const riskTone: Record<RiskLevel, string> = {
+  low: "bg-emerald-500",
+  medium: "bg-amber-500",
+  high: "bg-orange-600",
+  critical: "bg-red-600",
 };
 
-const statusStyles: Record<GateStatus, string> = {
-  pending: "border-sky-200 bg-sky-50 text-sky-800",
-  approved: "border-emerald-200 bg-emerald-50 text-emerald-800",
-  blocked: "border-red-200 bg-red-50 text-red-800",
-  modified: "border-violet-200 bg-violet-50 text-violet-800",
-  auto_executed: "border-neutral-200 bg-neutral-100 text-neutral-700",
+const statusTone: Record<GateStatus, string> = {
+  pending: "border-sky-300 bg-sky-50 text-sky-800",
+  approved: "border-emerald-300 bg-emerald-50 text-emerald-800",
+  blocked: "border-red-300 bg-red-50 text-red-800",
+  modified: "border-violet-300 bg-violet-50 text-violet-800",
+  auto_executed: "border-neutral-300 bg-neutral-100 text-neutral-700",
 };
 
 export default function Home() {
   const [demo, setDemo] = useState<DemoResponse | null>(null);
+  const [analytics, setAnalytics] = useState<LedgerAnalytics | null>(null);
+  const [selectedGateId, setSelectedGateId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [slackLoading, setSlackLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [decisionNote, setDecisionNote] = useState("Reviewed from hosted AgentLens console.");
-  const [analytics, setAnalytics] = useState<LedgerAnalytics | null>(null);
   const [health, setHealth] = useState<HealthState>("checking");
   const [slackChannel, setSlackChannel] = useState(DEFAULT_SLACK_CHANNEL);
+  const [decisionNote, setDecisionNote] = useState("Reviewed in AgentLens hosted console.");
   const [slackResult, setSlackResult] = useState<SlackSendResult | null>(null);
 
   useEffect(() => {
-    let alive = true;
+    let mounted = true;
     fetch(`${API_URL}/health`)
       .then((response) => {
-        if (alive) setHealth(response.ok ? "online" : "offline");
+        if (mounted) setHealth(response.ok ? "online" : "offline");
       })
       .catch(() => {
-        if (alive) setHealth("offline");
+        if (mounted) setHealth("offline");
       });
     return () => {
-      alive = false;
+      mounted = false;
     };
   }, []);
 
   const gates = demo?.timeline.gates ?? [];
   const traces = demo?.timeline.traces ?? [];
-  const pendingCount = useMemo(
-    () => gates.filter((gate) => gate.status === "pending").length,
-    [gates],
-  );
-  const resolvedCount = useMemo(
-    () =>
-      gates.filter((gate) =>
-        ["approved", "blocked", "modified", "auto_executed"].includes(gate.status),
-      ).length,
-    [gates],
-  );
-  const criticalCount = useMemo(
-    () => gates.filter((gate) => gate.risk_assessment.risk_level === "critical").length,
-    [gates],
-  );
+  const selectedGate = gates.find((gate) => gate.id === selectedGateId) ?? gates[0] ?? null;
   const traceByProposal = useMemo(
     () => new Map(traces.map((trace) => [trace.proposal_id, trace])),
     [traces],
   );
+  const pendingCount = gates.filter((gate) => gate.status === "pending").length;
+  const criticalCount = gates.filter((gate) => gate.risk_assessment.risk_level === "critical").length;
+  const resolvedCount = gates.filter((gate) => gate.status !== "pending").length;
+  const trustScore = analytics ? Math.round(analytics.trust_score.score * 100) : null;
   const apiHost = API_URL.replace(/^https?:\/\//, "");
 
   async function createDemo() {
@@ -163,6 +154,7 @@ export default function Home() {
       if (!response.ok) throw new Error(`Demo failed with ${response.status}`);
       const nextDemo = (await response.json()) as DemoResponse;
       setDemo(nextDemo);
+      setSelectedGateId(nextDemo.timeline.gates.find((gate) => gate.status === "pending")?.id ?? nextDemo.timeline.gates[0]?.id ?? null);
       setAnalytics(await fetchAnalytics(nextDemo.session.id));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create demo session");
@@ -196,7 +188,7 @@ export default function Home() {
         ? {
             reason: decisionNote,
             modified_instruction:
-              "Continue, but inspect references and propose a safer scoped change first.",
+              "Continue only after inspecting references and proposing a safer scoped change.",
           }
         : { reason: decisionNote };
 
@@ -210,14 +202,11 @@ export default function Home() {
       const updated = (await response.json()) as Gate;
       setDemo((current) => {
         if (!current) return current;
-        const updateGate = (item: Gate) => (item.id === updated.id ? updated : item);
+        const replace = (item: Gate) => (item.id === updated.id ? updated : item);
         return {
           ...current,
-          gates: current.gates.map(updateGate),
-          timeline: {
-            ...current.timeline,
-            gates: current.timeline.gates.map(updateGate),
-          },
+          gates: current.gates.map(replace),
+          timeline: { ...current.timeline, gates: current.timeline.gates.map(replace) },
         };
       });
       setAnalytics(await fetchAnalytics(updated.session_id));
@@ -227,133 +216,139 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f3f3f1] text-neutral-950">
-      <section className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-5 pb-8 lg:px-8">
-        <header className="-mx-5 grid gap-6 bg-neutral-950 px-5 py-6 text-white lg:-mx-8 lg:grid-cols-[minmax(0,1fr)_430px] lg:px-8">
-          <div className="flex min-w-0 flex-col justify-between gap-6">
-            <div className="flex flex-wrap items-center gap-2">
-              <Pill label="AgentLens" tone="dark" />
-              <Pill label="Hosted Demo" tone="blue" />
-              <Pill label={healthLabel(health)} tone={health === "online" ? "green" : "amber"} />
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase text-neutral-400">
-                AI Agent Supervision Console
-              </p>
-              <h1 className="mt-3 max-w-4xl text-4xl font-semibold leading-tight md:text-5xl">
-                Review risky agent actions before they change production code.
-              </h1>
-            </div>
-            <div className="grid gap-3 text-sm md:grid-cols-3">
-              <ProofPoint label="Intelligence" value="Trajectory, drift, confidence" />
-              <ProofPoint label="Approval Surface" value="Slack and console decisions" />
-              <ProofPoint label="Audit Ledger" value="Postgres-backed history" />
-            </div>
+    <main className="min-h-screen bg-[#f4f4f1] text-neutral-950">
+      <div className="grid min-h-screen lg:grid-cols-[264px_minmax(0,1fr)]">
+        <aside className="hidden border-r border-neutral-800 bg-neutral-950 text-white lg:flex lg:flex-col">
+          <div className="border-b border-neutral-800 px-6 py-5">
+            <p className="text-lg font-semibold">AgentLens</p>
+            <p className="mt-1 text-xs uppercase text-neutral-500">Agent Risk Control</p>
           </div>
+          <nav className="flex flex-1 flex-col gap-1 px-3 py-4 text-sm">
+            <NavItem label="Review Queue" active />
+            <NavItem label="Trajectory" />
+            <NavItem label="Policy Ledger" />
+            <NavItem label="Slack Surface" />
+            <NavItem label="Audit Events" />
+          </nav>
+          <div className="border-t border-neutral-800 p-4">
+            <StatusLine label="Backend" value={healthLabel(health)} ok={health === "online"} />
+            <StatusLine label="Database" value="Postgres Connected" ok />
+            <StatusLine label="OpenAI" value="Structured Outputs" ok />
+          </div>
+        </aside>
 
-          <section className="self-end border border-neutral-800 bg-neutral-900 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold">Demo Controls</p>
-                <p className="mt-1 truncate text-xs text-neutral-400">{apiHost}</p>
+        <section className="min-w-0">
+          <header className="border-b border-neutral-200 bg-white">
+            <div className="flex flex-col gap-4 px-5 py-4 xl:flex-row xl:items-center xl:justify-between xl:px-7">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge label="Hosted Demo" tone="blue" />
+                  <Badge label={healthLabel(health)} tone={health === "online" ? "green" : "amber"} />
+                  <span className="truncate text-xs text-neutral-500">{apiHost}</span>
+                </div>
+                <h1 className="mt-2 text-2xl font-semibold tracking-normal text-neutral-950">
+                  Agent Oversight Workspace
+                </h1>
+                <p className="mt-1 max-w-3xl text-sm text-neutral-600">
+                  Intercept agent tool calls, classify risk, request approval, and preserve a durable audit trail.
+                </p>
               </div>
-              <button
-                onClick={createDemo}
-                disabled={loading}
-                className="h-10 shrink-0 rounded-md bg-white px-4 text-sm font-semibold text-neutral-950 transition hover:bg-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-600 disabled:text-neutral-300"
-              >
-                {loading ? "Analyzing..." : "Create Session"}
-              </button>
-            </div>
 
-            <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto]">
-              <input
-                value={slackChannel}
-                onChange={(event) => setSlackChannel(event.target.value)}
-                className="h-10 rounded-md border border-neutral-700 bg-neutral-950 px-3 text-sm text-white outline-none focus:border-white"
-                aria-label="Slack channel ID"
-              />
-              <button
-                onClick={sendSlackCards}
-                disabled={slackLoading}
-                className="h-10 rounded-md border border-neutral-700 px-4 text-sm font-semibold text-white hover:border-white disabled:cursor-not-allowed disabled:text-neutral-500"
-              >
-                {slackLoading ? "Sending..." : "Send Slack Cards"}
-              </button>
+              <div className="grid gap-2 sm:grid-cols-[auto_170px_auto]">
+                <button
+                  onClick={createDemo}
+                  disabled={loading}
+                  className="h-10 rounded-md bg-neutral-950 px-4 text-sm font-semibold text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-400"
+                >
+                  {loading ? "Running Analysis" : "Run Demo Session"}
+                </button>
+                <input
+                  value={slackChannel}
+                  onChange={(event) => setSlackChannel(event.target.value)}
+                  className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium outline-none focus:border-neutral-950"
+                  aria-label="Slack channel ID"
+                />
+                <button
+                  onClick={sendSlackCards}
+                  disabled={slackLoading}
+                  className="h-10 rounded-md border border-neutral-300 bg-white px-4 text-sm font-semibold text-neutral-900 hover:border-neutral-950 disabled:cursor-not-allowed disabled:text-neutral-400"
+                >
+                  {slackLoading ? "Sending" : "Send To Slack"}
+                </button>
+              </div>
             </div>
+          </header>
+
+          <div className="flex flex-col gap-5 px-5 py-5 xl:px-7">
+            {error ? (
+              <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
+            ) : null}
             {slackResult ? (
-              <div className="mt-3 border border-sky-800 bg-sky-950/40 px-3 py-2 text-xs text-sky-100">
-                Posted {slackResult.posted.length} card
-                {slackResult.posted.length === 1 ? "" : "s"} for{" "}
+              <div className="border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+                Posted {slackResult.posted.length} Slack approval card
+                {slackResult.posted.length === 1 ? "" : "s"} for session{" "}
                 {slackResult.session_id.slice(0, 12)}.
               </div>
             ) : null}
-          </section>
-        </header>
 
-        {error ? (
-          <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-            {error}
-          </div>
-        ) : null}
+            <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+              <Metric label="Session" value={demo ? demo.session.id.slice(0, 13) : "Not Started"} />
+              <Metric label="Trace Events" value={String(traces.length)} />
+              <Metric label="Pending Gates" value={String(pendingCount)} accent="sky" />
+              <Metric label="Resolved" value={String(resolvedCount)} accent="green" />
+              <Metric label="Critical" value={String(criticalCount)} accent={criticalCount ? "red" : "neutral"} />
+            </section>
 
-        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          <Metric label="Session" value={demo ? demo.session.id.slice(0, 13) : "Not started"} />
-          <Metric label="Trace Events" value={String(traces.length)} />
-          <Metric label="Pending Gates" value={String(pendingCount)} accent="sky" />
-          <Metric label="Resolved Actions" value={String(resolvedCount)} accent="green" />
-          <Metric
-            label="Critical Blocks"
-            value={String(criticalCount)}
-            accent={criticalCount > 0 ? "red" : "neutral"}
-          />
-        </section>
-
-        <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_390px]">
-          <div className="flex flex-col gap-5">
-            <section>
-              <div className="flex flex-col gap-3 border-b border-neutral-300 pb-4 md:flex-row md:items-end md:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase text-neutral-500">Live Review</p>
-                  <h2 className="mt-1 text-2xl font-semibold">Decision Queue</h2>
-                  <p className="mt-1 max-w-2xl text-sm text-neutral-600">
-                    {demo
+            <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+              <div className="flex min-w-0 flex-col gap-5">
+                <PanelHeader
+                  eyebrow="Live Review"
+                  title="Decision Queue"
+                  body={
+                    demo
                       ? demo.session.original_instruction
-                      : "Safe reads, gated writes, and destructive migration attempts are staged for review."}
-                  </p>
-                </div>
-                <input
-                  value={decisionNote}
-                  onChange={(event) => setDecisionNote(event.target.value)}
-                  className="h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm outline-none focus:border-neutral-950 md:w-[430px]"
-                  aria-label="Decision note"
+                      : "A complete demo run will stage a safe read, a gated code write, and a blocked migration delete."
+                  }
                 />
+                {gates.length === 0 ? (
+                  <EmptyQueue onCreate={createDemo} loading={loading} />
+                ) : (
+                  <div className="overflow-x-auto rounded-lg border border-neutral-200 bg-white shadow-sm">
+                    <div className="grid min-w-[640px] grid-cols-[90px_minmax(0,1fr)_118px_88px] border-b border-neutral-200 bg-neutral-50 px-4 py-2 text-xs font-semibold uppercase text-neutral-500">
+                      <span>Risk</span>
+                      <span>Action</span>
+                      <span>Status</span>
+                      <span>Confidence</span>
+                    </div>
+                    {gates.map((gate) => (
+                      <QueueRow
+                        key={gate.id}
+                        gate={gate}
+                        trace={traceByProposal.get(gate.proposal_id)}
+                        selected={selectedGate?.id === gate.id}
+                        onSelect={() => setSelectedGateId(gate.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                <div className="grid gap-5 xl:grid-cols-2">
+                  <TimelinePanel traces={traces} />
+                  <AnalyticsPanel analytics={analytics} trustScore={trustScore} />
+                </div>
               </div>
 
-              <div className="mt-4 flex flex-col gap-4">
-                {gates.length === 0 ? (
-                  <EmptyState onCreate={createDemo} loading={loading} />
-                ) : (
-                  gates.map((gate) => (
-                    <DecisionCard
-                      key={gate.id}
-                      gate={gate}
-                      trace={traceByProposal.get(gate.proposal_id)}
-                      onDecision={decide}
-                    />
-                  ))
-                )}
-              </div>
+              <Inspector
+                gate={selectedGate}
+                trace={selectedGate ? traceByProposal.get(selectedGate.proposal_id) : undefined}
+                decisionNote={decisionNote}
+                onDecisionNote={setDecisionNote}
+                onDecision={decide}
+              />
             </section>
           </div>
-
-          <aside className="flex flex-col gap-5">
-            <SystemPanel health={health} />
-            <AnalyticsPanel analytics={analytics} />
-            <TimelinePanel traces={traces} />
-          </aside>
         </section>
-      </section>
+      </div>
     </main>
   );
 }
@@ -362,12 +357,6 @@ async function fetchAnalytics(sessionId: string) {
   const response = await fetch(`${API_URL}/sessions/${sessionId}/analytics`);
   if (!response.ok) throw new Error(`Analytics failed with ${response.status}`);
   return (await response.json()) as LedgerAnalytics;
-}
-
-function healthLabel(health: HealthState) {
-  if (health === "online") return "Backend Online";
-  if (health === "offline") return "Backend Offline";
-  return "Checking Backend";
 }
 
 function titleCase(value: string) {
@@ -391,33 +380,47 @@ function toolLabel(value: string | undefined) {
   return value ? (labels[value] ?? titleCase(value)) : "Tool Call";
 }
 
-function Pill({
-  label,
-  tone,
-}: {
-  label: string;
-  tone: "green" | "blue" | "amber" | "neutral" | "dark";
-}) {
-  const styles = {
-    green: "border-emerald-400/50 bg-emerald-400/10 text-emerald-100",
-    blue: "border-sky-400/50 bg-sky-400/10 text-sky-100",
-    amber: "border-amber-400/50 bg-amber-400/10 text-amber-100",
-    neutral: "border-neutral-200 bg-white text-neutral-700",
-    dark: "border-neutral-700 bg-neutral-900 text-white",
-  };
+function healthLabel(health: HealthState) {
+  if (health === "online") return "Backend Online";
+  if (health === "offline") return "Backend Offline";
+  return "Checking Backend";
+}
+
+function NavItem({ label, active = false }: { label: string; active?: boolean }) {
   return (
-    <span className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase ${styles[tone]}`}>
+    <div
+      className={`rounded-md px-3 py-2 ${
+        active ? "bg-white text-neutral-950" : "text-neutral-400 hover:bg-neutral-900 hover:text-white"
+      }`}
+    >
       {label}
-    </span>
+    </div>
   );
 }
 
-function ProofPoint({ label, value }: { label: string; value: string }) {
+function StatusLine({ label, value, ok }: { label: string; value: string; ok: boolean }) {
   return (
-    <div className="border border-neutral-800 bg-neutral-900 px-3 py-2">
-      <p className="text-xs font-semibold uppercase text-neutral-500">{label}</p>
-      <p className="mt-1 font-medium text-neutral-100">{value}</p>
+    <div className="flex items-center justify-between gap-3 py-2">
+      <div>
+        <p className="text-xs uppercase text-neutral-500">{label}</p>
+        <p className="text-sm text-neutral-200">{value}</p>
+      </div>
+      <span className={`h-2 w-2 rounded-full ${ok ? "bg-emerald-400" : "bg-amber-400"}`} />
     </div>
+  );
+}
+
+function Badge({ label, tone }: { label: string; tone: "blue" | "green" | "amber" | "neutral" }) {
+  const styles = {
+    blue: "border-sky-200 bg-sky-50 text-sky-800",
+    green: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    amber: "border-amber-200 bg-amber-50 text-amber-800",
+    neutral: "border-neutral-200 bg-neutral-50 text-neutral-700",
+  };
+  return (
+    <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${styles[tone]}`}>
+      {label}
+    </span>
   );
 }
 
@@ -430,132 +433,233 @@ function Metric({
   value: string;
   accent?: "neutral" | "green" | "sky" | "red";
 }) {
-  const accentStyles = {
+  const styles = {
     neutral: "border-neutral-200",
     green: "border-emerald-300",
     sky: "border-sky-300",
     red: "border-red-300",
   };
   return (
-    <div className={`rounded-lg border bg-white p-4 shadow-sm ${accentStyles[accent]}`}>
+    <div className={`rounded-lg border bg-white p-4 shadow-sm ${styles[accent]}`}>
       <p className="text-xs font-semibold uppercase text-neutral-500">{label}</p>
       <p className="mt-2 truncate text-2xl font-semibold">{value}</p>
     </div>
   );
 }
 
-function SystemPanel({ health }: { health: HealthState }) {
+function PanelHeader({ eyebrow, title, body }: { eyebrow: string; title: string; body: string }) {
   return (
-    <section className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
-      <p className="text-xs font-semibold uppercase text-neutral-500">Infrastructure</p>
-      <h2 className="mt-1 text-lg font-semibold">Runtime Status</h2>
-      <div className="mt-4 flex flex-col gap-3">
-        <StatusRow label="Backend API" value={healthLabel(health)} ok={health === "online"} />
-        <StatusRow label="OpenAI Layer" value="Structured Outputs Enabled" ok />
-        <StatusRow label="Slack Surface" value="Hosted Interactivity Live" ok />
-        <StatusRow label="Ledger Store" value="Render Postgres Attached" ok />
+    <div className="border-b border-neutral-300 pb-3">
+      <p className="text-xs font-semibold uppercase text-neutral-500">{eyebrow}</p>
+      <div className="mt-1 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        <h2 className="text-2xl font-semibold">{title}</h2>
+        <p className="max-w-2xl text-sm leading-6 text-neutral-600">{body}</p>
       </div>
-    </section>
+    </div>
   );
 }
 
-function StatusRow({ label, value, ok }: { label: string; value: string; ok: boolean }) {
+function EmptyQueue({ onCreate, loading }: { onCreate: () => void; loading: boolean }) {
+  const rows = [
+    ["Low", "File Read", "Auto Execute", "Read-only inspection enters the ledger."],
+    ["Medium", "File Write", "Require Approval", "Scoped code edits receive trajectory and drift analysis."],
+    ["Critical", "File Delete", "Block And Alert", "Migration deletes are stopped before execution."],
+  ];
   return (
-    <div className="flex items-center justify-between gap-3 rounded-md bg-neutral-50 px-3 py-2">
-      <div>
-        <p className="text-sm font-medium text-neutral-900">{label}</p>
-        <p className="text-xs text-neutral-500">{value}</p>
+    <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
+      {rows.map(([risk, action, policy, note]) => (
+        <div key={action} className="grid gap-3 border-b border-neutral-100 px-4 py-4 last:border-b-0 md:grid-cols-[110px_150px_160px_1fr]">
+          <span className="text-sm font-semibold">{risk}</span>
+          <span className="text-sm text-neutral-700">{action}</span>
+          <span className="text-sm text-neutral-700">{policy}</span>
+          <span className="text-sm text-neutral-500">{note}</span>
+        </div>
+      ))}
+      <div className="flex flex-col gap-3 border-t border-neutral-200 bg-neutral-50 px-4 py-4 md:flex-row md:items-center md:justify-between">
+        <p className="text-sm text-neutral-600">Run the demo to populate the live queue and inspector.</p>
+        <button
+          onClick={onCreate}
+          disabled={loading}
+          className="h-10 rounded-md bg-neutral-950 px-4 text-sm font-semibold text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-400"
+        >
+          {loading ? "Running Analysis" : "Run Demo Session"}
+        </button>
       </div>
+    </div>
+  );
+}
+
+function QueueRow({
+  gate,
+  trace,
+  selected,
+  onSelect,
+}: {
+  gate: Gate;
+  trace: TraceEvent | undefined;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const card = gate.intelligence_card;
+  const risk = gate.risk_assessment.risk_level;
+  const confidence = Math.round((card?.confidence ?? 0) * 100);
+  return (
+    <button
+      onClick={onSelect}
+      className={`grid min-w-[640px] w-full grid-cols-[90px_minmax(0,1fr)_118px_88px] items-center gap-3 border-b border-neutral-100 px-4 py-4 text-left last:border-b-0 hover:bg-neutral-50 ${
+        selected ? "bg-neutral-50" : "bg-white"
+      }`}
+    >
+      <span className="flex items-center gap-2 text-sm font-semibold">
+        <span className={`h-2.5 w-2.5 rounded-full ${riskTone[risk]}`} />
+        {titleCase(risk)}
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-semibold">
+          {toolLabel(trace?.tool_name)} on {gate.risk_assessment.affected_files[0] ?? "External State"}
+        </span>
+        <span className="mt-1 block truncate text-xs text-neutral-500">
+          {card?.summary ?? trace?.stated_reason ?? "No summary available"}
+        </span>
+      </span>
       <span
-        className={`h-2.5 w-2.5 rounded-full ${ok ? "bg-emerald-500" : "bg-amber-500"}`}
-        aria-hidden="true"
-      />
-    </div>
+        className={`w-fit rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone[gate.status]}`}
+      >
+        {titleCase(gate.status)}
+      </span>
+      <span className="text-sm font-semibold">{confidence}%</span>
+    </button>
   );
 }
 
-function AnalyticsPanel({ analytics }: { analytics: LedgerAnalytics | null }) {
-  const trust = analytics ? Math.round(analytics.trust_score.score * 100) : 0;
+function Inspector({
+  gate,
+  trace,
+  decisionNote,
+  onDecisionNote,
+  onDecision,
+}: {
+  gate: Gate | null;
+  trace: TraceEvent | undefined;
+  decisionNote: string;
+  onDecisionNote: (value: string) => void;
+  onDecision: (gate: Gate, action: "approve" | "block" | "modify") => Promise<void>;
+}) {
+  if (!gate) {
+    return (
+      <aside className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
+        <p className="text-xs font-semibold uppercase text-neutral-500">Inspector</p>
+        <h2 className="mt-2 text-xl font-semibold">No Action Selected</h2>
+        <p className="mt-3 text-sm leading-6 text-neutral-600">
+          Run a demo session to inspect risk, trajectory, drift, policy, and approval controls.
+        </p>
+      </aside>
+    );
+  }
+
+  const card = gate.intelligence_card;
+  const disabled = gate.status !== "pending";
   return (
-    <section className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
+    <aside className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
+      <p className="text-xs font-semibold uppercase text-neutral-500">Inspector</p>
+      <div className="mt-3 flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase text-neutral-500">Audit Intelligence</p>
-          <h2 className="mt-1 text-lg font-semibold">Ledger Analytics</h2>
+          <h2 className="text-xl font-semibold">{toolLabel(trace?.tool_name)}</h2>
           <p className="mt-1 text-sm text-neutral-500">
-            {analytics ? `${analytics.trust_score.total_actions} Actions Recorded` : "Awaiting Session"}
+            {gate.risk_assessment.affected_files[0] ?? "External State"}
           </p>
         </div>
-        <div className="text-right">
-          <p className="text-2xl font-semibold">{analytics ? `${trust}%` : "--"}</p>
-          <p className="text-xs uppercase text-neutral-500">Trust</p>
-        </div>
+        <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone[gate.status]}`}>
+          {titleCase(gate.status)}
+        </span>
       </div>
 
-      <div className="mt-4 flex flex-col gap-4">
-        <ProgressBar value={trust} />
-        <BucketList title="Approval Patterns" buckets={analytics?.approval_patterns ?? []} />
-        <BucketList title="Risk Distribution" buckets={analytics?.risk_distribution ?? []} />
-
-        <div>
-          <p className="text-sm font-semibold">Drift Flags</p>
-          {analytics?.drift_history.length ? (
-            <div className="mt-2 flex flex-col gap-2">
-              {analytics.drift_history.map((item) => (
-                <div
-                  key={item.gate_id}
-                  className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
-                >
-                  <p className="font-medium">
-                    {item.risk_level} / {item.status.replace("_", " ")}
-                  </p>
-                  <p className="mt-1 leading-5">{item.drift_flag}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-2 rounded-md bg-neutral-50 px-3 py-2 text-sm text-neutral-500">
-              No drift records yet.
-            </p>
-          )}
-        </div>
+      <div className="mt-5 grid grid-cols-3 gap-3">
+        <Fact label="Risk" value={titleCase(gate.risk_assessment.risk_level)} />
+        <Fact label="Blast" value={titleCase(gate.risk_assessment.blast_radius)} />
+        <Fact label="Confidence" value={`${Math.round((card?.confidence ?? 0) * 100)}%`} />
       </div>
-    </section>
-  );
-}
 
-function ProgressBar({ value }: { value: number }) {
-  return (
-    <div className="h-2 rounded-full bg-neutral-100">
-      <div
-        className="h-2 rounded-full bg-emerald-600 transition-all"
-        style={{ width: `${Math.max(0, Math.min(value, 100))}%` }}
+      <Section title="Recommendation">
+        <p>{card?.summary ?? "No intelligence summary available."}</p>
+      </Section>
+
+      <Section title="Trajectory">
+        <p>{card?.trajectory_preview ?? "No trajectory preview available."}</p>
+      </Section>
+
+      <Section title="Evidence">
+        <ul className="flex flex-col gap-2">
+          {gate.risk_assessment.evidence.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      </Section>
+
+      {card?.drift_flag ? (
+        <Section title="Drift">
+          <p>{card.drift_flag}</p>
+        </Section>
+      ) : null}
+
+      {gate.human_reason ? (
+        <Section title="Decision">
+          <p>{gate.human_reason}</p>
+        </Section>
+      ) : null}
+
+      <label className="mt-5 block text-xs font-semibold uppercase text-neutral-500" htmlFor="decision-note">
+        Decision Note
+      </label>
+      <input
+        id="decision-note"
+        value={decisionNote}
+        onChange={(event) => onDecisionNote(event.target.value)}
+        className="mt-2 h-10 w-full rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-950"
       />
+
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        <button
+          onClick={() => onDecision(gate, "approve")}
+          disabled={disabled}
+          className="h-10 rounded-md bg-neutral-950 text-sm font-semibold text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500"
+        >
+          Approve
+        </button>
+        <button
+          onClick={() => onDecision(gate, "block")}
+          disabled={disabled}
+          className="h-10 rounded-md border border-red-700 text-sm font-semibold text-red-800 hover:bg-red-50 disabled:cursor-not-allowed disabled:border-neutral-200 disabled:text-neutral-400"
+        >
+          Block
+        </button>
+        <button
+          onClick={() => onDecision(gate, "modify")}
+          disabled={disabled}
+          className="h-10 rounded-md border border-neutral-300 text-sm font-semibold text-neutral-800 hover:border-neutral-950 disabled:cursor-not-allowed disabled:border-neutral-200 disabled:text-neutral-400"
+        >
+          Modify
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border border-neutral-200 bg-neutral-50 p-3">
+      <p className="text-xs font-semibold uppercase text-neutral-500">{label}</p>
+      <p className="mt-1 truncate text-sm font-semibold text-neutral-950">{value}</p>
     </div>
   );
 }
 
-function BucketList({ title, buckets }: { title: string; buckets: CountBucket[] }) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div>
-      <p className="text-sm font-semibold">{title}</p>
-      <div className="mt-2 flex flex-col gap-2">
-        {buckets.length === 0 ? (
-          <p className="rounded-md bg-neutral-50 px-3 py-2 text-sm text-neutral-500">
-            No records yet.
-          </p>
-        ) : (
-          buckets.map((bucket) => (
-            <div key={bucket.name} className="flex items-center justify-between text-sm">
-              <span className="text-neutral-600">{titleCase(bucket.name)}</span>
-              <span className="rounded bg-neutral-100 px-2 py-0.5 font-semibold">
-                {bucket.count}
-              </span>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
+    <section className="mt-5 border-t border-neutral-200 pt-4">
+      <p className="text-xs font-semibold uppercase text-neutral-500">{title}</p>
+      <div className="mt-2 text-sm leading-6 text-neutral-700">{children}</div>
+    </section>
   );
 }
 
@@ -566,20 +670,14 @@ function TimelinePanel({ traces }: { traces: TraceEvent[] }) {
       <h2 className="mt-1 text-lg font-semibold">Execution Timeline</h2>
       <div className="mt-4 flex flex-col gap-3">
         {traces.length === 0 ? (
-          <div className="rounded-md bg-neutral-50 px-3 py-3 text-sm text-neutral-500">
-            Waiting for intercepted tool calls.
-          </div>
+          <p className="text-sm text-neutral-500">No intercepted tool calls yet.</p>
         ) : (
           traces.map((trace, index) => (
-            <div key={trace.id} className="rounded-md border border-neutral-100 bg-neutral-50 p-3">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-xs font-semibold uppercase text-neutral-500">Step {index + 1}</p>
-                <p className="text-xs text-neutral-500">{toolLabel(trace.tool_name)}</p>
-              </div>
-              <p className="mt-2 text-sm font-medium">{trace.stated_reason}</p>
-              <code className="mt-2 block overflow-x-auto rounded bg-white p-2 text-xs text-neutral-700">
-                {JSON.stringify(trace.params)}
-              </code>
+            <div key={trace.id} className="border-l-2 border-neutral-300 pl-3">
+              <p className="text-xs font-semibold uppercase text-neutral-500">
+                Step {index + 1} / {toolLabel(trace.tool_name)}
+              </p>
+              <p className="mt-1 text-sm text-neutral-700">{trace.stated_reason}</p>
             </div>
           ))
         )}
@@ -588,174 +686,46 @@ function TimelinePanel({ traces }: { traces: TraceEvent[] }) {
   );
 }
 
-function EmptyState({ onCreate, loading }: { onCreate: () => void; loading: boolean }) {
-  return (
-    <div className="grid gap-4 lg:grid-cols-3">
-      <PreviewCard
-        title="Safe Inspection"
-        risk="low"
-        body="Read-only calls pass automatically and still enter the ledger."
-      />
-      <PreviewCard
-        title="Gated Write"
-        risk="medium"
-        body="Code changes get trajectory, confidence, drift, and approval controls."
-      />
-      <PreviewCard
-        title="Destructive Action"
-        risk="critical"
-        body="Migration deletes are blocked and preserved as auditable decisions."
-      />
-      <div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 p-5 lg:col-span-3">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="font-semibold">No active session</p>
-            <p className="mt-1 text-sm text-neutral-500">
-              The hosted console is connected and ready to generate the full review ledger.
-            </p>
-          </div>
-          <button
-            onClick={onCreate}
-            disabled={loading}
-            className="h-10 rounded-md bg-neutral-950 px-4 text-sm font-semibold text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-400"
-          >
-            {loading ? "Analyzing..." : "Run Full Demo"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PreviewCard({ title, risk, body }: { title: string; risk: RiskLevel; body: string }) {
-  return (
-    <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
-      <span className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase ${riskStyles[risk]}`}>
-        {risk}
-      </span>
-      <p className="mt-4 font-semibold">{title}</p>
-      <p className="mt-2 text-sm leading-6 text-neutral-600">{body}</p>
-    </div>
-  );
-}
-
-function DecisionCard({
-  gate,
-  trace,
-  onDecision,
+function AnalyticsPanel({
+  analytics,
+  trustScore,
 }: {
-  gate: Gate;
-  trace: TraceEvent | undefined;
-  onDecision: (gate: Gate, action: "approve" | "block" | "modify") => Promise<void>;
+  analytics: LedgerAnalytics | null;
+  trustScore: number | null;
 }) {
-  const card = gate.intelligence_card;
-  const risk = card?.risk_badge ?? gate.risk_assessment.risk_level;
-  const disabled = gate.status !== "pending";
-  const confidence = Math.round((card?.confidence ?? 0) * 100);
-
   return (
-    <article className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+    <section className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase ${riskStyles[risk]}`}
-            >
-              {risk}
-            </span>
-            <span
-              className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusStyles[gate.status]}`}
-            >
-              {titleCase(gate.status)}
-            </span>
-            <span className="rounded-full border border-neutral-200 px-3 py-1 text-xs font-semibold uppercase text-neutral-600">
-              {confidence}% confidence
-            </span>
-          </div>
-          <h3 className="mt-3 text-xl font-semibold">
-            {toolLabel(trace?.tool_name)} on{" "}
-            {gate.risk_assessment.affected_files[0] ?? "external state"}
-          </h3>
+          <p className="text-xs font-semibold uppercase text-neutral-500">Audit Intelligence</p>
+          <h2 className="mt-1 text-lg font-semibold">Ledger Analytics</h2>
         </div>
-        <p className="rounded-md bg-neutral-950 px-3 py-2 text-sm font-medium text-white">
-          {titleCase(gate.policy_decision.action)}
-        </p>
+        <p className="text-2xl font-semibold">{trustScore === null ? "--" : `${trustScore}%`}</p>
       </div>
-
-      <p className="mt-4 text-base leading-7 text-neutral-800">
-        {card?.summary ?? "No summary available."}
-      </p>
-
-      <div className="mt-4 grid gap-3 lg:grid-cols-3">
-        <Fact label="Reversibility" value={titleCase(gate.risk_assessment.reversibility)} />
-        <Fact label="Blast Radius" value={titleCase(gate.risk_assessment.blast_radius)} />
-        <Fact
-          label="Policy Source"
-          value={titleCase(gate.policy_decision.matched_policy ?? "semantic risk")}
-        />
+      <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-1">
+        <BucketList title="Approval Patterns" buckets={analytics?.approval_patterns ?? []} />
+        <BucketList title="Risk Distribution" buckets={analytics?.risk_distribution ?? []} />
       </div>
-
-      <section className="mt-4 grid gap-3 lg:grid-cols-2">
-        <div className="rounded-md bg-neutral-50 p-3">
-          <p className="text-xs font-semibold uppercase text-neutral-500">Trajectory</p>
-          <p className="mt-2 text-sm leading-6 text-neutral-700">
-            {card?.trajectory_preview ?? "No trajectory preview available."}
-          </p>
-        </div>
-        <div className="rounded-md bg-neutral-50 p-3">
-          <p className="text-xs font-semibold uppercase text-neutral-500">Evidence</p>
-          <ul className="mt-2 flex flex-col gap-1 text-sm leading-6 text-neutral-700">
-            {gate.risk_assessment.evidence.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
-      {card?.drift_flag ? (
-        <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
-          {card.drift_flag}
-        </p>
-      ) : null}
-
-      {gate.human_reason ? (
-        <p className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-          {gate.human_reason}
-        </p>
-      ) : null}
-
-      <div className="mt-5 flex flex-wrap gap-2">
-        <button
-          onClick={() => onDecision(gate, "approve")}
-          disabled={disabled}
-          className="h-10 rounded-md bg-neutral-950 px-4 text-sm font-semibold text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500"
-        >
-          Approve
-        </button>
-        <button
-          onClick={() => onDecision(gate, "block")}
-          disabled={disabled}
-          className="h-10 rounded-md border border-red-700 px-4 text-sm font-semibold text-red-800 hover:bg-red-50 disabled:cursor-not-allowed disabled:border-neutral-200 disabled:text-neutral-400"
-        >
-          Block
-        </button>
-        <button
-          onClick={() => onDecision(gate, "modify")}
-          disabled={disabled}
-          className="h-10 rounded-md border border-neutral-300 px-4 text-sm font-semibold text-neutral-800 hover:border-neutral-950 disabled:cursor-not-allowed disabled:border-neutral-200 disabled:text-neutral-400"
-        >
-          Modify
-        </button>
-      </div>
-    </article>
+    </section>
   );
 }
 
-function Fact({ label, value }: { label: string; value: string }) {
+function BucketList({ title, buckets }: { title: string; buckets: CountBucket[] }) {
   return (
-    <div className="rounded-md border border-neutral-100 bg-neutral-50 p-3">
-      <p className="text-xs font-semibold uppercase text-neutral-500">{label}</p>
-      <p className="mt-1 truncate font-medium text-neutral-900">{value}</p>
+    <div>
+      <p className="text-xs font-semibold uppercase text-neutral-500">{title}</p>
+      <div className="mt-2 flex flex-col gap-2">
+        {buckets.length === 0 ? (
+          <p className="text-sm text-neutral-500">No records yet.</p>
+        ) : (
+          buckets.map((bucket) => (
+            <div key={bucket.name} className="flex items-center justify-between text-sm">
+              <span className="text-neutral-700">{titleCase(bucket.name)}</span>
+              <span className="font-semibold">{bucket.count}</span>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 }

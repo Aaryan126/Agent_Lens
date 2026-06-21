@@ -144,5 +144,8 @@ Human validation:
 - Click Slack Approve / Block / Modify and confirm cards update.
 - Confirm sessions survive backend restart when PostgreSQL is enabled.
 
-Status: in progress. Deployment docs, backend Dockerfile, Render blueprint, configurable CORS,
-PostgreSQL URL normalization, and opt-in PostgreSQL-backed runtime storage are implemented.
+Status: complete for the hosted judging demo path. Deployment docs, backend Dockerfile,
+Render backend, Render Postgres, Vercel frontend, configurable CORS, PostgreSQL URL
+normalization, Slack hosted interactivity, and PostgreSQL-backed runtime storage are
+implemented and live-validated. The public frontend was smoke-tested against the hosted
+backend after the operator-console redesign.
