@@ -8,8 +8,17 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from agentlens.analytics import build_ledger_analytics
 from agentlens.config import load_settings
-from agentlens.schemas import Gate, GateStatus, Session, SessionStart, Timeline, ToolCallProposal
+from agentlens.schemas import (
+    Gate,
+    GateStatus,
+    LedgerAnalytics,
+    Session,
+    SessionStart,
+    Timeline,
+    ToolCallProposal,
+)
 from agentlens.session import AgentLensSession
 from agentlens.simulator import default_demo_proposals
 from agentlens.slack import (
@@ -85,6 +94,14 @@ def timeline(session_id: str) -> Timeline:
         raise HTTPException(status_code=404, detail="session not found")
     session = AgentLensSession(store.get_session(session_id))
     return session.timeline()
+
+
+@app.get("/sessions/{session_id}/analytics")
+def session_analytics(session_id: str) -> LedgerAnalytics:
+    if session_id not in store.sessions:
+        raise HTTPException(status_code=404, detail="session not found")
+    _, gates = store.timeline(session_id)
+    return build_ledger_analytics(session_id, gates)
 
 
 @app.get("/gates/pending")

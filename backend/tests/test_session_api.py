@@ -66,6 +66,22 @@ def test_demo_session_endpoint_creates_reviewable_gates(monkeypatch) -> None:
     assert body["timeline"]["traces"]
 
 
+def test_session_analytics_endpoint(monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "replace_me")
+    client = TestClient(app)
+    response = client.post("/demo/session")
+    assert response.status_code == 200
+    session_id = response.json()["session"]["id"]
+
+    analytics_response = client.get(f"/sessions/{session_id}/analytics")
+
+    assert analytics_response.status_code == 200
+    body = analytics_response.json()
+    assert body["session_id"] == session_id
+    assert body["trust_score"]["total_actions"] >= 1
+    assert body["risk_distribution"]
+
+
 def test_gate_decision_endpoint_resolves_pending_gate(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "replace_me")
     client = TestClient(app)

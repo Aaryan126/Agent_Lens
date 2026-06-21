@@ -21,6 +21,9 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 - Git snapshots are truncated at 12,000 characters in the initial trace engine to keep local UI/API payloads usable.
 - Slack Block Kit rendering, request signature verification, and interactive action handling are implemented and tested.
 - CLI can print Slack Block Kit payloads for pending gates with `uv run agentlens-demo --fixture ../examples/demo_session.json --slack`.
+- Ledger analytics are implemented with `GET /sessions/{id}/analytics`.
+- The frontend renders trust score, approval patterns, risk distribution, and drift history alongside the session timeline.
+- Browser smoke verified analytics panels render and remain visible after approving a pending gate.
 
 ## Known Gaps
 
@@ -33,5 +36,5 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 
 1. Review the frontend npm audit finding before forcing dependency changes; the available audit fix is breaking.
 2. Configure a real Slack app and point its Interactivity Request URL at `/integrations/slack/actions`.
-3. Expand persistence from in-memory to PostgreSQL when the API contract stabilizes.
-4. Add ledger analytics views for approval patterns, drift history, and trust score.
+3. Expand persistence from in-memory to PostgreSQL now that the session, gate, Slack, and analytics contracts are stable.
+4. Add a real Codex adapter and competition demo script.

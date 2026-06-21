@@ -103,8 +103,9 @@ Automatic validation:
 Human validation:
 - Replay one full demo session.
 
-Status: partially complete. The same UI now shows a compact timeline for the local demo,
-but analytics views are not implemented yet.
+Status: complete for first implementation. The backend exposes `GET /sessions/{id}/analytics`,
+and the local ledger renders trust score, approval patterns, risk distribution, and drift
+history alongside the timeline.
 
 ## Phase 7: Codex Adapter and Competition Polish
 

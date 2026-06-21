@@ -178,3 +178,30 @@ class Timeline(BaseModel):
     session: Session
     traces: list[TraceEvent]
     gates: list[Gate]
+
+
+class CountBucket(BaseModel):
+    name: str
+    count: int
+
+
+class DriftRecord(BaseModel):
+    gate_id: str
+    risk_level: RiskLevel
+    status: GateStatus
+    drift_flag: str
+
+
+class TrustScore(BaseModel):
+    score: float = Field(ge=0.0, le=1.0)
+    auto_executed: int
+    human_interventions: int
+    total_actions: int
+
+
+class LedgerAnalytics(BaseModel):
+    session_id: str
+    trust_score: TrustScore
+    approval_patterns: list[CountBucket]
+    risk_distribution: list[CountBucket]
+    drift_history: list[DriftRecord]

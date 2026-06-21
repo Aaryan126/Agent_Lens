@@ -108,6 +108,13 @@ ledger card to avoid unnecessary model calls.
 The local review UI uses `POST /demo/session` to create a sample session and decision
 endpoints under `/gates/{id}` to approve, block, or modify pending gates.
 
+The ledger also calls `GET /sessions/{id}/analytics` to show:
+
+- Trust score: actions completed without human intervention.
+- Approval patterns: gate status counts.
+- Risk distribution: low/medium/high/critical counts.
+- Drift history: gated actions with drift flags.
+
 ## Slack Integration
 
 AgentLens exposes `POST /integrations/slack/actions` for Slack Block Kit interactions.

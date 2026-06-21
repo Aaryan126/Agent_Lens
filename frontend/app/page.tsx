@@ -61,6 +61,29 @@ type DemoResponse = {
   };
 };
 
+type CountBucket = {
+  name: string;
+  count: number;
+};
+
+type LedgerAnalytics = {
+  session_id: string;
+  trust_score: {
+    score: number;
+    auto_executed: number;
+    human_interventions: number;
+    total_actions: number;
+  };
+  approval_patterns: CountBucket[];
+  risk_distribution: CountBucket[];
+  drift_history: {
+    gate_id: string;
+    risk_level: RiskLevel;
+    status: GateStatus;
+    drift_flag: string;
+  }[];
+};
+
 const riskStyles: Record<RiskLevel, string> = {
   low: "border-emerald-200 bg-emerald-50 text-emerald-800",
   medium: "border-amber-200 bg-amber-50 text-amber-800",
@@ -73,6 +96,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [decisionNote, setDecisionNote] = useState("Reviewed from local approval UI.");
+  const [analytics, setAnalytics] = useState<LedgerAnalytics | null>(null);
 
   const gates = demo?.timeline.gates ?? [];
   const pendingCount = useMemo(
@@ -91,7 +115,9 @@ export default function Home() {
     try {
       const response = await fetch(`${API_URL}/demo/session`, { method: "POST" });
       if (!response.ok) throw new Error(`Demo failed with ${response.status}`);
-      setDemo(await response.json());
+      const nextDemo = (await response.json()) as DemoResponse;
+      setDemo(nextDemo);
+      setAnalytics(await fetchAnalytics(nextDemo.session.id));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create demo session");
     } finally {
@@ -130,6 +156,7 @@ export default function Home() {
           },
         };
       });
+      setAnalytics(await fetchAnalytics(updated.session_id));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to submit decision");
     }
@@ -166,7 +193,14 @@ export default function Home() {
           <Metric label="Session" value={demo ? demo.session.id.slice(0, 12) : "Not started"} />
           <Metric label="Trace Events" value={String(demo?.timeline.traces.length ?? 0)} />
           <Metric label="Pending Gates" value={String(pendingCount)} />
-          <Metric label="Intervention Rate" value={`${interventionRate}%`} />
+          <Metric
+            label="Trust Score"
+            value={
+              analytics
+                ? `${Math.round(analytics.trust_score.score * 100)}%`
+                : `${100 - interventionRate}%`
+            }
+          />
         </section>
 
         <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
@@ -191,7 +225,10 @@ export default function Home() {
           </section>
 
           <aside className="flex flex-col gap-4">
-            <h2 className="text-xl font-semibold">Timeline</h2>
+            <h2 className="text-xl font-semibold">Ledger Analytics</h2>
+            <AnalyticsPanel analytics={analytics} />
+
+            <h2 className="pt-2 text-xl font-semibold">Timeline</h2>
             <div className="rounded-lg border border-neutral-200 bg-white">
               {(demo?.timeline.traces ?? []).map((trace, index) => (
                 <div key={trace.id} className="border-b border-neutral-100 p-4 last:border-b-0">
@@ -214,11 +251,79 @@ export default function Home() {
   );
 }
 
+async function fetchAnalytics(sessionId: string) {
+  const response = await fetch(`${API_URL}/sessions/${sessionId}/analytics`);
+  if (!response.ok) throw new Error(`Analytics failed with ${response.status}`);
+  return (await response.json()) as LedgerAnalytics;
+}
+
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-4">
       <p className="text-sm text-neutral-500">{label}</p>
       <p className="mt-2 truncate text-2xl font-semibold">{value}</p>
+    </div>
+  );
+}
+
+function AnalyticsPanel({ analytics }: { analytics: LedgerAnalytics | null }) {
+  if (!analytics) {
+    return (
+      <div className="rounded-lg border border-neutral-200 bg-white p-4 text-sm text-neutral-500">
+        Create a demo session to calculate trust, approval patterns, risk distribution, and drift.
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="rounded-lg border border-neutral-200 bg-white p-4">
+        <p className="text-sm text-neutral-500">Actions without intervention</p>
+        <p className="mt-2 text-3xl font-semibold">
+          {Math.round(analytics.trust_score.score * 100)}%
+        </p>
+        <p className="mt-1 text-sm text-neutral-500">
+          {analytics.trust_score.auto_executed} auto /{" "}
+          {analytics.trust_score.total_actions} total
+        </p>
+      </div>
+
+      <BucketList title="Approval Patterns" buckets={analytics.approval_patterns} />
+      <BucketList title="Risk Distribution" buckets={analytics.risk_distribution} />
+
+      <div className="rounded-lg border border-neutral-200 bg-white p-4">
+        <p className="text-sm font-semibold">Drift History</p>
+        {analytics.drift_history.length === 0 ? (
+          <p className="mt-2 text-sm text-neutral-500">No drift flags in this session.</p>
+        ) : (
+          <div className="mt-3 flex flex-col gap-3">
+            {analytics.drift_history.map((item) => (
+              <div key={item.gate_id} className="rounded-md bg-amber-50 p-3 text-sm text-amber-900">
+                <p className="font-medium">
+                  {item.risk_level} / {item.status.replace("_", " ")}
+                </p>
+                <p className="mt-1">{item.drift_flag}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BucketList({ title, buckets }: { title: string; buckets: CountBucket[] }) {
+  return (
+    <div className="rounded-lg border border-neutral-200 bg-white p-4">
+      <p className="text-sm font-semibold">{title}</p>
+      <div className="mt-3 flex flex-col gap-2">
+        {buckets.map((bucket) => (
+          <div key={bucket.name} className="flex items-center justify-between text-sm">
+            <span className="capitalize text-neutral-600">{bucket.name.replace("_", " ")}</span>
+            <span className="font-semibold">{bucket.count}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
