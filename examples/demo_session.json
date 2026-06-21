@@ -1,0 +1,26 @@
+[
+  {
+    "tool_name": "fs.read",
+    "params": {
+      "path": "prd.md"
+    },
+    "stated_reason": "Need to inspect product requirements before coding.",
+    "confidence": 0.95
+  },
+  {
+    "tool_name": "fs.write",
+    "params": {
+      "path": "backend/src/agentlens/session.py"
+    },
+    "stated_reason": "Add session orchestration for intercepted tool calls.",
+    "confidence": 0.86
+  },
+  {
+    "tool_name": "fs.delete",
+    "params": {
+      "path": "backend/migrations/001_sessions.py"
+    },
+    "stated_reason": "The migration appears redundant.",
+    "confidence": 0.58
+  }
+]

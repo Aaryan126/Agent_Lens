@@ -1,0 +1,44 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.python-version
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Node / frontend
+node_modules/
+.next/
+out/
+coverage/
+playwright-report/
+test-results/
+
+# Local data and logs
+*.log
+*.sqlite
+*.sqlite3
+local_data/
+tmp/
+temp/
+.DS_Store
+
+# Tooling
+.idea/
+.vscode/
+
