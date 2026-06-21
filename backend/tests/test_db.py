@@ -4,6 +4,7 @@ from agentlens.db import (
     GateRecord,
     SessionRecord,
     TraceRecord,
+    create_engine,
     normalize_async_database_url,
 )
 
@@ -38,3 +39,8 @@ def test_database_url_is_normalized_for_asyncpg() -> None:
     assert normalize_async_database_url("postgresql+asyncpg://u:p@host/db").startswith(
         "postgresql+asyncpg://"
     )
+
+
+def test_async_engine_uses_null_pool_for_sync_bridge() -> None:
+    engine = create_engine("postgresql+asyncpg://u:p@localhost/db")
+    assert engine.pool.__class__.__name__ == "NullPool"

@@ -7,6 +7,7 @@ from sqlalchemy import DateTime, Integer, String, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.pool import NullPool
 
 from agentlens.schemas import Gate, Session, TraceEvent
 
@@ -62,7 +63,7 @@ class AuditEventRecord(Base):
 
 
 def create_engine(database_url: str) -> AsyncEngine:
-    return create_async_engine(normalize_async_database_url(database_url))
+    return create_async_engine(normalize_async_database_url(database_url), poolclass=NullPool)
 
 
 def normalize_async_database_url(database_url: str) -> str:
