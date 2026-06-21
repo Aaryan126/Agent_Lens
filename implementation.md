@@ -13,6 +13,8 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 - CLI simulator entrypoint with `agentlens-demo` and `examples/demo_session.json`.
 - Backend tests and ruff checks pass after dependency sync.
 - Real OpenAI integration test passes with `OPENAI_API_KEY` configured: `uv run pytest -m integration` selected 1 test and passed in 4.67s on June 21, 2026.
+- Gated actions now build live OpenAI intelligence cards with trajectory prediction, embedding-based drift detection, calibrated confidence, and two-sentence translation.
+- Auto-executed safe actions keep a lightweight deterministic ledger card to avoid unnecessary model calls.
 - Frontend dependencies install and the Next.js ledger shell builds successfully.
 
 ## Known Gaps
@@ -27,4 +29,4 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 1. Review the frontend npm audit finding before forcing dependency changes; the available audit fix is breaking.
 2. Expand persistence from in-memory to PostgreSQL when the API contract stabilizes.
 3. Implement Slack Block Kit approvals after the local gate flow is stable.
-4. Replace fallback approval cards with live OpenAI-generated trajectory, drift, confidence, and translation output in the gate flow.
+4. Improve the local approval UX so pending gates are easy to review without reading raw JSON.

@@ -57,7 +57,8 @@ Automatic validation:
 Human validation:
 - Approval card summaries are clear in under 10 seconds.
 
-Status: scaffolded with real OpenAI integration test path.
+Status: complete for first implementation. Gated actions now generate real trajectory,
+embedding-based drift, calibrated confidence, and OpenAI translation cards.
 
 ## Phase 4: Local Approval Surface
 
@@ -71,7 +72,8 @@ Automatic validation:
 Human validation:
 - Approve/block/modify at least 3 demo actions locally.
 
-Status: complete for baseline local API endpoints.
+Status: complete for baseline local API endpoints and CLI demo output. Human-facing local
+approval UX can still be improved before Slack.
 
 ## Phase 5: Slack Approval Surface
 

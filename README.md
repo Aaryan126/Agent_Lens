@@ -21,7 +21,7 @@ The first build is local-first: a simulator emits tool-call proposals through th
 - Evaluate ordered policies from `agentlens.config.yaml`.
 - Score reversibility and blast radius with a deterministic baseline.
 - Gate risky actions for local approval.
-- Call real OpenAI structured-output intelligence when `OPENAI_API_KEY` is configured.
+- Call real OpenAI structured-output intelligence for gated actions when `OPENAI_API_KEY` is configured.
 
 ## Setup
 
@@ -47,7 +47,9 @@ cd backend
 uv run pytest
 ```
 
-4. Run OpenAI integration tests:
+If `OPENAI_API_KEY` is configured, the full test run includes real OpenAI integration tests.
+
+4. Run only OpenAI integration tests:
 
 ```bash
 cd backend
@@ -81,6 +83,10 @@ uv run agentlens-demo --fixture ../examples/demo_session.json
 
 For a faster CLI-only check, run `uv run agentlens-demo --fixture ../examples/demo_session.json`
 from `backend/`.
+
+With `OPENAI_API_KEY` configured, gated demo actions produce live trajectory, drift,
+confidence, and translation output. Auto-executed low-risk actions use a lightweight
+ledger card to avoid unnecessary model calls.
 
 ## Environment Variables
 

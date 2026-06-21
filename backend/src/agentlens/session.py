@@ -42,7 +42,19 @@ class AgentLensSession:
 
         risk = self.risk_classifier.assess(proposal)
         policy = self.policy_engine.evaluate(proposal, risk)
-        card = self.intelligence.fallback_card(proposal, risk)
+        if policy.action == PolicyAction.AUTO_EXECUTE:
+            card = self.intelligence.fallback_card(
+                proposal,
+                risk,
+                trajectory_preview="No trajectory generated because policy auto-executed this low-risk action.",
+            )
+        else:
+            card = self.intelligence.build_card(
+                instruction=self.session.original_instruction,
+                proposal=proposal,
+                risk=risk,
+                session_summary=self._session_summary(),
+            )
 
         status = GateStatus.PENDING
         if policy.action == PolicyAction.AUTO_EXECUTE:
@@ -65,3 +77,14 @@ class AgentLensSession:
         traces, gates = self.storage.timeline(self.session.id)
         return Timeline(session=self.session, traces=traces, gates=gates)
 
+    def _session_summary(self) -> str:
+        traces, gates = self.storage.timeline(self.session.id)
+        trace_lines = [
+            f"{event.tool_name} {event.params} reason={event.stated_reason or 'not provided'}"
+            for event in traces[-8:]
+        ]
+        gate_lines = [
+            f"{gate.status} risk={gate.risk_assessment.risk_level} policy={gate.policy_decision.action}"
+            for gate in gates[-8:]
+        ]
+        return "\n".join(trace_lines + gate_lines) or "No prior session activity."

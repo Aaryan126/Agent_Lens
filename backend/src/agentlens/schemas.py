@@ -147,6 +147,10 @@ class ConfidenceAssessment(BaseModel):
     evidence: list[str] = Field(default_factory=list)
 
 
+class TranslationResult(BaseModel):
+    summary: str = Field(max_length=500)
+
+
 class IntelligenceCard(BaseModel):
     proposal_id: str
     summary: str
@@ -174,4 +178,3 @@ class Timeline(BaseModel):
     session: Session
     traces: list[TraceEvent]
     gates: list[Gate]
-
