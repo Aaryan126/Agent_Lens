@@ -168,7 +168,7 @@ export default function Home() {
     setError(null);
     try {
       const response = await fetch(`${API_URL}/demo/session`, { method: "POST" });
-      if (!response.ok) throw new Error(`Demo failed with ${response.status}`);
+      if (!response.ok) throw new Error(`Session failed with ${response.status}`);
       const nextDemo = (await response.json()) as DemoResponse;
       setDemo(nextDemo);
       setSelectedGateId(
@@ -179,7 +179,7 @@ export default function Home() {
       setAnalytics(await fetchAnalytics(nextDemo.session.id));
       setActiveView("review");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to create demo session");
+      setError(err instanceof Error ? err.message : "Unable to start supervision");
     } finally {
       setLoading(false);
     }
@@ -268,7 +268,7 @@ export default function Home() {
             <div className="mx-auto flex max-w-[1680px] flex-col gap-4 px-5 py-4 xl:flex-row xl:items-center xl:justify-between xl:px-8">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge label="Hosted Demo" tone="blue" />
+                  <Badge label="Live Review" tone="blue" />
                   <Badge label={healthLabel(health)} tone={health === "online" ? "green" : "amber"} />
                   <span className="truncate text-xs font-medium text-neutral-500">{apiHost}</span>
                 </div>
@@ -286,7 +286,7 @@ export default function Home() {
                   disabled={loading}
                   className="h-10 rounded-md bg-neutral-950 px-4 text-sm font-semibold text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-400"
                 >
-                  {loading ? "Running Analysis" : "Run Demo Session"}
+                  {loading ? "Starting Session" : "Start Supervision"}
                 </button>
                 <input
                   value={slackChannel}
@@ -316,7 +316,7 @@ export default function Home() {
             ) : null}
 
             <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-              <Metric label="Session" value={demo ? demo.session.id.slice(0, 13) : "Not Started"} />
+              <Metric label="Session" value={demo ? demo.session.id.slice(0, 13) : "Idle"} />
               <Metric label="Trace Events" value={String(traces.length)} />
               <Metric label="Pending Gates" value={String(pendingCount)} accent="sky" />
               <Metric label="Resolved" value={String(resolvedCount)} accent="green" />
@@ -407,7 +407,7 @@ function ReviewView({
           body={
             demo
               ? demo.session.original_instruction
-              : "A complete demo run stages a safe read, a gated code write, and a blocked migration delete."
+              : "AgentLens is connected and waiting for Codex to propose a tool call that needs judgment."
           }
         />
         {gates.length === 0 ? (
@@ -455,8 +455,8 @@ function TrajectoryView({
         {gates.length === 0 ? (
           <EmptyPanel
             title="No trajectory yet"
-            body="Run a demo session to generate predicted next steps and commitment points for gated actions."
-            action="Run Demo Session"
+            body="Start supervision to capture Codex actions and generate predicted next steps with commitment points."
+            action="Start Supervision"
             onAction={onCreate}
           />
         ) : (
@@ -594,7 +594,7 @@ function SlackSurfaceView({
           </div>
         ) : (
           <p className="mt-5 text-sm leading-6 text-neutral-600">
-            Send cards after creating a session, or use this action to create a backend-owned Slack demo session.
+            Send cards after creating a session, or use this action to create a backend-owned approval session.
           </p>
         )}
       </Panel>
@@ -623,7 +623,7 @@ function AuditEventsView({
         />
         <div className="mt-5 grid gap-3">
           {traces.length === 0 && gates.length === 0 ? (
-            <p className="text-sm text-neutral-600">No audit events yet. Run a demo session to populate the ledger.</p>
+            <p className="text-sm text-neutral-600">No audit events yet. Start supervision to populate the ledger.</p>
           ) : null}
           {traces.map((trace, index) => (
             <LedgerRow
@@ -702,13 +702,13 @@ function EmptyQueue({ onCreate, loading }: { onCreate: () => void; loading: bool
         ))}
       </div>
       <div className="flex flex-col gap-3 border-t border-neutral-200 bg-neutral-50 px-4 py-4 md:flex-row md:items-center md:justify-between">
-        <p className="text-sm text-neutral-600">Run the demo to populate the live queue and inspector.</p>
+        <p className="text-sm text-neutral-600">Waiting for Codex to propose an action that needs review.</p>
         <button
           onClick={onCreate}
           disabled={loading}
           className="h-10 rounded-md bg-neutral-950 px-4 text-sm font-semibold text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-400"
         >
-          {loading ? "Running Analysis" : "Run Demo Session"}
+          {loading ? "Starting Session" : "Start Supervision"}
         </button>
       </div>
     </div>
@@ -774,7 +774,7 @@ function Inspector({
       <aside className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
         <PanelTitle eyebrow="Inspector" title="No Action Selected" />
         <p className="mt-4 text-sm leading-6 text-neutral-600">
-          Run a demo session to inspect risk, trajectory, drift, policy, and approval controls.
+          Start supervision to inspect risk, trajectory, drift, policy, and approval controls.
         </p>
         <div className="mt-6 grid gap-2">
           <Fact label="Review Mode" value="Pending Gate" />

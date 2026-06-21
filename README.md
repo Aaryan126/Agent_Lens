@@ -73,9 +73,10 @@ cd frontend
 npm run dev
 ```
 
-Open `http://localhost:3000`, then click **Run Demo Session**. The UI creates a demo
-session, renders the decision queue, inspector, timeline, policy ledger, Slack surface,
-and audit views, and lets you approve, block, or modify pending gates.
+Open `http://localhost:3000`, then click **Start Supervision**. The UI starts a
+supervised AgentLens session, renders incoming Codex-style tool calls in the decision
+queue, inspector, timeline, policy ledger, Slack surface, and audit views, and lets you
+approve, block, or modify pending gates.
 
 7. Run the simulator demo:
 
