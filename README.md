@@ -76,7 +76,17 @@ uv run agentlens-guard --repo /path/to/your/repo
 This starts a local AgentLens API at `http://127.0.0.1:8787`, stores the ledger locally,
 and keeps Codex execution on your machine.
 
-7. Run the frontend approval console against the local guard:
+7. Run Codex from your terminal while mirroring events into AgentLens:
+
+```bash
+cd backend
+uv run agentlens-codex --repo /path/to/your/repo "What is this repo about?"
+```
+
+This runs Codex locally, prints readable terminal output, and mirrors parsed Codex
+tool-call proposals into the local AgentLens dashboard.
+
+8. Run the frontend approval console against the local guard:
 
 ```bash
 cd frontend
@@ -102,7 +112,7 @@ uv run agentlens-demo \
   --codex-prompt "Inspect this repo and propose the next implementation step."
 ```
 
-8. Run the simulator demo:
+9. Run the simulator demo:
 
 ```bash
 cd backend

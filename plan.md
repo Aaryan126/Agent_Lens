@@ -170,3 +170,8 @@ Status: first implementation complete. `agentlens-guard` starts the local API on
 `127.0.0.1:8787`; `/codex/sessions` runs the local Codex CLI adapter and gates parsed
 tool-call proposals; the frontend detects local API mode and calls the local Codex
 endpoint instead of the hosted bridge flow.
+
+Follow-up status: terminal-first mirroring is implemented with `agentlens-codex`, letting
+developers run Codex from their normal terminal while AgentLens mirrors parsed tool calls
+into the dashboard. Low-risk inspection calls are collapsed in the review queue and
+timeline to keep the dashboard focused on meaningful supervision events.

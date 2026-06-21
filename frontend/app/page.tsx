@@ -777,6 +777,12 @@ function QueueTable({
   traceByProposal: Map<string, TraceEvent>;
   onSelectGate: (id: string) => void;
 }) {
+  const inspectionGates = gates.filter((gate) =>
+    isInspectionGate(gate, traceByProposal.get(gate.proposal_id)),
+  );
+  const visibleGates = gates.filter(
+    (gate) => !isInspectionGate(gate, traceByProposal.get(gate.proposal_id)),
+  );
   return (
     <div className="overflow-x-auto rounded-lg border border-neutral-200 bg-white shadow-sm">
       <div className="grid min-w-[640px] grid-cols-[90px_minmax(0,1fr)_118px_88px] border-b border-neutral-200 bg-neutral-50 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-neutral-500">
@@ -785,7 +791,8 @@ function QueueTable({
         <span>Status</span>
         <span>Confidence</span>
       </div>
-      {gates.map((gate) => (
+      {inspectionGates.length > 0 ? <InspectionBatchRow count={inspectionGates.length} /> : null}
+      {visibleGates.map((gate) => (
         <QueueRow
           key={gate.id}
           gate={gate}
@@ -794,6 +801,29 @@ function QueueTable({
           onSelect={() => onSelectGate(gate.id)}
         />
       ))}
+    </div>
+  );
+}
+
+function InspectionBatchRow({ count }: { count: number }) {
+  return (
+    <div className="grid min-w-[640px] w-full grid-cols-[90px_minmax(0,1fr)_118px_88px] items-center gap-3 border-b border-neutral-100 bg-white px-4 py-4 text-left">
+      <span className="flex items-center gap-2 text-sm font-semibold">
+        <span className={`h-2.5 w-2.5 rounded-full ${riskDot.low}`} />
+        Low
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-semibold">
+          Auto-Executed Inspection Batch
+        </span>
+        <span className="mt-1 block truncate text-xs text-neutral-500">
+          {count} read-only shell/file inspection {count === 1 ? "call" : "calls"} collapsed.
+        </span>
+      </span>
+      <span className={`w-fit rounded-full border px-2.5 py-1 text-xs font-semibold ${statusChip.auto_executed}`}>
+        Auto Executed
+      </span>
+      <span className="text-sm font-semibold">Low</span>
     </div>
   );
 }
@@ -1068,6 +1098,8 @@ function TimelinePanel({
   compact?: boolean;
   frameless?: boolean;
 }) {
+  const inspectionTraces = traces.filter((trace) => isInspectionTrace(trace));
+  const visibleTraces = traces.filter((trace) => !isInspectionTrace(trace));
   const content = (
     <>
       {!frameless ? <PanelTitle eyebrow="Trace Capture" title="Execution Timeline" small /> : null}
@@ -1075,16 +1107,28 @@ function TimelinePanel({
         {traces.length === 0 ? (
           <p className="text-sm text-neutral-500">No intercepted tool calls yet.</p>
         ) : (
-          traces.map((trace, index) => (
-            <div key={trace.id} className="border-l-2 border-neutral-300 pl-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                Step {index + 1} / {toolLabel(trace.tool_name)}
-              </p>
-              <p className={`mt-1 text-sm text-neutral-700 ${compact ? "leading-5" : "leading-6"}`}>
-                {trace.stated_reason}
-              </p>
-            </div>
-          ))
+          <>
+            {inspectionTraces.length > 0 ? (
+              <div className="border-l-2 border-emerald-300 pl-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                  Inspection Batch
+                </p>
+                <p className={`mt-1 text-sm text-neutral-700 ${compact ? "leading-5" : "leading-6"}`}>
+                  {inspectionTraces.length} read-only commands captured and auto-executed.
+                </p>
+              </div>
+            ) : null}
+            {visibleTraces.map((trace, index) => (
+              <div key={trace.id} className="border-l-2 border-neutral-300 pl-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                  Step {index + 1} / {toolLabel(trace.tool_name)}
+                </p>
+                <p className={`mt-1 text-sm text-neutral-700 ${compact ? "leading-5" : "leading-6"}`}>
+                  {trace.stated_reason || summarizeTrace(trace)}
+                </p>
+              </div>
+            ))}
+          </>
         )}
       </div>
     </>
@@ -1347,4 +1391,60 @@ function healthLabel(health: HealthState) {
 
 function isLocalApi(apiUrl: string) {
   return /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?/.test(apiUrl);
+}
+
+function isInspectionGate(gate: Gate, trace: TraceEvent | undefined) {
+  if (gate.status !== "auto_executed") return false;
+  if (gate.risk_assessment.risk_level !== "low") return false;
+  const tool = trace?.tool_name ?? "";
+  if (tool === "fs.read" || tool === "git.status" || tool === "run_tests") return true;
+  if (tool !== "shell.run") return false;
+  const command = String(trace?.params.command ?? trace?.params.cmd ?? "").toLowerCase();
+  const readOnlyHints = [
+    "pwd",
+    "ls",
+    "rg",
+    "grep",
+    "find",
+    "cat",
+    "sed",
+    "head",
+    "tail",
+    "git status",
+    "git diff",
+    "git show",
+    "tree",
+    "wc",
+  ];
+  return readOnlyHints.some((hint) => command.includes(hint));
+}
+
+function isInspectionTrace(trace: TraceEvent) {
+  if (trace.tool_name === "fs.read" || trace.tool_name === "git.status") return true;
+  if (trace.tool_name !== "shell.run") return false;
+  const command = String(trace.params.command ?? trace.params.cmd ?? "").toLowerCase();
+  return [
+    "pwd",
+    "ls",
+    "rg",
+    "grep",
+    "find",
+    "cat",
+    "sed",
+    "head",
+    "tail",
+    "git status",
+    "git diff",
+    "git show",
+    "tree",
+    "wc",
+  ].some((hint) => command.includes(hint));
+}
+
+function summarizeTrace(trace: TraceEvent) {
+  if (trace.tool_name === "shell.run") {
+    return String(trace.params.command ?? trace.params.cmd ?? "Shell command captured.");
+  }
+  if (trace.params.path) return String(trace.params.path);
+  return "Tool call captured.";
 }

@@ -5,6 +5,7 @@ import httpx
 
 from agentlens.adapters.codex_cli import CodexCliAdapter, parse_codex_jsonl
 from agentlens.cli import _run_remote
+from agentlens.codex_terminal import main as codex_terminal_main
 
 
 def test_parse_codex_jsonl_extracts_tool_call_proposal() -> None:
@@ -138,4 +139,63 @@ def test_remote_codex_mode_posts_parsed_proposals(monkeypatch, tmp_path) -> None
     assert requests[0][1] == "https://agentlens.example/sessions"
     assert requests[1][1] == "https://agentlens.example/sessions/ses_remote/tool-calls"
     assert requests[1][2]["session_id"] == "ses_remote"
+    assert requests[1][2]["tool_name"] == "shell.run"
+
+
+def test_agentlens_codex_command_creates_session_and_posts(monkeypatch, tmp_path) -> None:
+    requests: list[tuple[str, str, dict[str, object]]] = []
+
+    class FakeClient:
+        def __init__(self, timeout: int) -> None:
+            self.timeout = timeout
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def post(self, url: str, json: dict[str, object]):
+            requests.append(("POST", url, json))
+            request = httpx.Request("POST", url)
+            if url.endswith("/sessions"):
+                return httpx.Response(200, json={"id": "ses_terminal"}, request=request)
+            return httpx.Response(
+                200,
+                json={"id": "gate_terminal", "status": "auto_executed"},
+                request=request,
+            )
+
+    def fake_run(self, **kwargs):
+        class Result:
+            returncode = 0
+            stderr = ""
+            stdout = (
+                '{"type":"item.started","item":{"type":"command_execution","command":"pwd","status":"in_progress"}}\n'
+            )
+            proposals = parse_codex_jsonl(stdout.splitlines(), session_id=kwargs["session_id"])
+
+        return Result()
+
+    monkeypatch.setattr(httpx, "Client", FakeClient)
+    monkeypatch.setattr(CodexCliAdapter, "run", fake_run)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "agentlens-codex",
+            "--repo",
+            str(tmp_path),
+            "--api-url",
+            "http://127.0.0.1:8787",
+            "What is this repo about?",
+        ],
+    )
+
+    try:
+        codex_terminal_main()
+    except SystemExit as exc:
+        assert exc.code == 0
+
+    assert requests[0][1] == "http://127.0.0.1:8787/sessions"
+    assert requests[1][1] == "http://127.0.0.1:8787/sessions/ses_terminal/tool-calls"
     assert requests[1][2]["tool_name"] == "shell.run"

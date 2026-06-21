@@ -35,6 +35,7 @@ dev = [
 
 [project.scripts]
 agentlens-demo = "agentlens.cli:main"
+agentlens-codex = "agentlens.codex_terminal:main"
 agentlens-guard = "agentlens.guard:main"
 
 [tool.pytest.ini_options]

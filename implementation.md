@@ -57,6 +57,8 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 - The CLI supports remote posting with `--api-url` and `--session-id`, so `uv run agentlens-demo --codex-prompt ...` can run Codex locally and submit parsed tool-call proposals to the hosted backend.
 - Local-first guard mode is implemented with `uv run agentlens-guard --repo ...`. It starts a local API on `127.0.0.1:8787`, keeps storage local by default, and lets the frontend call `/codex/sessions` so Codex runs on the developer's machine instead of in the hosted backend.
 - `POST /codex/sessions` runs the Codex CLI adapter locally, parses real Codex JSON events, gates the resulting proposals, and returns the same timeline/ledger shape as the hosted session API.
+- Terminal-first Codex mirroring is implemented with `uv run agentlens-codex --repo ... "task"`. It creates or uses an AgentLens session, runs Codex locally, prints readable terminal output, and mirrors parsed tool-call proposals into the AgentLens API.
+- The frontend review queue and timeline now collapse low-risk auto-executed inspection calls into a single inspection batch so read-only exploration does not flood the dashboard.
 - Latest hosted smoke passed: every sidebar section switched content, `Start Supervision` created a real hosted session, remote CLI posting populated the review queue, and no horizontal overflow was detected on desktop or mobile.
 
 ## Known Gaps
