@@ -7,6 +7,15 @@ split is:
 - Frontend UI: Vercel Next.js deployment.
 - Slack Interactivity Request URL: the Render backend URL.
 
+Free-tier caveats to plan around:
+
+- Render free web services spin down after 15 minutes without inbound traffic and can take
+  about a minute to wake up. Warm the backend with `/health` before judging.
+- Render free Postgres expires 30 days after creation. Create the database close to demo
+  day or upgrade if the demo needs to live longer.
+- Vercel Hobby is free for personal, non-commercial projects and is suitable for this
+  judging demo frontend.
+
 ## 1. Backend on Render
 
 Use the included `render.yaml` blueprint or create the service manually.
