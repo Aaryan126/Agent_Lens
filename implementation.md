@@ -44,16 +44,18 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 - Deployment prep is implemented with configurable CORS, provider Postgres URL normalization, `backend/Dockerfile`, `render.yaml`, `frontend/.env.example`, and `docs/deployment.md`.
 - Hosted demo deployment is live on free tiers: backend `https://agentlens-api-ggkh.onrender.com`, frontend `https://frontend-ashy-mu-csvn2wfbmk.vercel.app`.
 - Render backend `/health` passed, Vercel production deploy passed, and hosted CORS preflight passed for the Vercel frontend origin.
+- Hosted Render Postgres is provisioned: `agentlens-db` (`dpg-d8rtkbe7r5hc73epfmpg-a`), free plan, Singapore region, expires on July 21, 2026.
+- Hosted backend now runs with `AGENTLENS_STORAGE_BACKEND=postgres`; hosted demo session creation passed, audit events were present after a Render service restart, confirming persisted runtime state.
 
 ## Known Gaps
 
 - Slack backend integration is implemented and live-validated through ngrok.
-- PostgreSQL runtime storage is implemented but still needs live validation against a real managed Postgres instance.
+- PostgreSQL runtime storage is implemented and live-validated against Render Postgres.
 - Redis remains a documented future target for in-flight state/cache, but it is not required for the hosted demo path yet.
 
 ## Next Steps
 
-1. Validate `AGENTLENS_STORAGE_BACKEND=postgres` against a real local or hosted PostgreSQL instance.
-2. Create or attach Render Postgres if the demo needs restart-proof persisted sessions; current hosted backend is running with in-memory state because Render CLI cannot create Postgres directly.
-3. Update Slack Interactivity to the hosted backend URL and repeat the live button test.
+1. Update Slack Interactivity to the hosted backend URL and repeat the live button test.
+2. Warm `https://agentlens-api-ggkh.onrender.com/health` before judging because Render free web services sleep after idle.
+3. Renew or upgrade Render Postgres before July 21, 2026 if the demo must remain live.
 4. Review the frontend npm audit finding before forcing dependency changes; the available audit fix is breaking.

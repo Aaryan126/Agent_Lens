@@ -34,12 +34,23 @@ SLACK_CHANNEL_ID=<demo channel ID>
 AGENTLENS_CORS_ORIGINS=<Vercel frontend URL>
 ```
 
+Current hosted demo values:
+
+```text
+Backend: https://agentlens-api-ggkh.onrender.com
+Frontend: https://frontend-ashy-mu-csvn2wfbmk.vercel.app
+Postgres: agentlens-db / dpg-d8rtkbe7r5hc73epfmpg-a
+Postgres expiry: 2026-07-21
+```
+
 Notes:
 
 - Render may provide `DATABASE_URL` as `postgres://...` or `postgresql://...`; AgentLens
   normalizes that to the async SQLAlchemy driver automatically.
 - `AGENTLENS_STORAGE_BACKEND=postgres` is required for durable hosted state. Without it,
   the app uses in-memory state and Slack buttons can break after a restart.
+- The current hosted backend is configured with `AGENTLENS_STORAGE_BACKEND=postgres` and
+  has been validated after a Render service restart.
 - After deployment, verify:
 
 ```bash
