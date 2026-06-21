@@ -119,4 +119,9 @@ Automatic validation:
 Human validation:
 - Run the final judging demo against the rubric in `prd.md` and the supplied judging criteria.
 
-Status: planned.
+Status: mostly complete for local competition demo. AgentLens now has an append-only JSONL audit log,
+`GET /audit/events`, PostgreSQL-ready SQLAlchemy ledger models, and a Codex CLI adapter.
+Real Codex JSONL validation confirmed `command_execution` and `file_change` parsing.
+Read-only Codex inspection commands auto-execute as low risk, while file changes become
+`fs.write` / `fs.delete` proposals. The final local demo script and rubric checklist are
+implemented. Remaining work: live Slack validation and PostgreSQL-backed runtime state.

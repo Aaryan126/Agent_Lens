@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     slack_bot_token: str = ""
     slack_signing_secret: str = ""
+    agentlens_audit_log_path: str = "local_data/agentlens_audit.jsonl"
 
     @property
     def has_openai_key(self) -> bool:
@@ -75,4 +76,3 @@ def load_config(config_path: str | os.PathLike[str]) -> AgentLensConfig:
         return AgentLensConfig()
     raw = yaml.safe_load(path.read_text()) or {}
     return AgentLensConfig.model_validate(raw)
-

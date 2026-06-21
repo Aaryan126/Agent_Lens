@@ -62,7 +62,7 @@ class IntelligenceLayer:
         drift_flag = drift.explanation if drift.drift_detected else None
         return IntelligenceCard(
             proposal_id=proposal.id,
-            summary=translation.summary,
+            summary=self._clean_summary(translation.summary),
             risk_badge=risk.risk_level,
             confidence=confidence.score,
             trajectory_preview=(
@@ -160,7 +160,7 @@ class IntelligenceLayer:
                         "Write an approval-card summary for a developer who has not watched "
                         "the session. Return exactly one JSON object. The summary must be at "
                         "most two concise sentences and include action, reason, codebase "
-                        "evidence, risk, and confidence."
+                        "evidence, risk, and confidence. Use English only and plain ASCII text."
                     ),
                 },
                 {
@@ -182,6 +182,15 @@ class IntelligenceLayer:
             text_format=TranslationResult,
         )
         return response.output_parsed
+
+    def _clean_summary(self, summary: str) -> str:
+        cleaned = summary.encode("ascii", errors="ignore").decode().strip()
+        cleaned = " ".join(cleaned.split())
+        if len(cleaned) > 500:
+            cleaned = cleaned[:497].rstrip() + "..."
+        if cleaned and cleaned[-1] not in ".!?":
+            cleaned = f"{cleaned}."
+        return cleaned
 
     def _embed_pair(self, left: str, right: str) -> tuple[list[float], list[float]]:
         response = self.client.embeddings.create(

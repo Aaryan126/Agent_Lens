@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import ast
+import re
+import shlex
 from pathlib import Path
 
 from agentlens.schemas import (
@@ -75,6 +77,8 @@ class SemanticRiskClassifier:
 
         if tool in {"fs.read", "git.status", "run_tests"}:
             return Reversibility.LOW
+        if tool == "shell.run" and self._is_read_only_shell_command(proposal.params):
+            return Reversibility.LOW
         if tool == "fs.delete":
             return Reversibility.HIGH
         if tool == "db.query" and any(term in joined for term in ["drop table", "truncate", "delete from"]):
@@ -115,6 +119,10 @@ class SemanticRiskClassifier:
             evidence.append("external API or database action can affect state outside this repo")
             return BlastRadius.MEDIUM, evidence
 
+        if proposal.tool_name == "shell.run" and self._is_read_only_shell_command(proposal.params):
+            evidence.append("shell command appears read-only")
+            return BlastRadius.LOW, evidence
+
         evidence.append("no broad dependency or external-state evidence found")
         return BlastRadius.LOW, evidence
 
@@ -136,3 +144,82 @@ class SemanticRiskClassifier:
             return PolicyAction.BLOCK_AND_ALERT
         return PolicyAction.REQUIRE_APPROVAL
 
+    def _is_read_only_shell_command(self, params: dict) -> bool:
+        command = str(params.get("command") or params.get("cmd") or "").strip()
+        if not command:
+            return False
+
+        lowered = command.lower()
+        write_markers = [
+            ">",
+            ">>",
+            " tee ",
+            " rm ",
+            " rm -",
+            " mv ",
+            " cp ",
+            " touch ",
+            " mkdir ",
+            " rmdir ",
+            " chmod ",
+            " chown ",
+            " apply_patch",
+            " git add",
+            " git commit",
+            " git push",
+            " npm install",
+            " uv sync",
+            " pip install",
+            " curl ",
+            " wget ",
+        ]
+        padded = f" {lowered} "
+        if any(marker in padded for marker in write_markers):
+            return False
+
+        inner = self._extract_shell_inner_command(command)
+        command_words = [
+            part
+            for part in re.split(r"\s*(?:&&|\|\||\||;)\s*", inner)
+            if part.strip()
+        ]
+        if not command_words:
+            return False
+
+        read_only = {
+            "cat",
+            "find",
+            "git",
+            "head",
+            "ls",
+            "nl",
+            "pwd",
+            "rg",
+            "sed",
+            "sort",
+            "tail",
+            "wc",
+        }
+        for part in command_words:
+            try:
+                tokens = shlex.split(part)
+            except ValueError:
+                return False
+            if not tokens:
+                return False
+            executable = Path(tokens[0]).name
+            if executable not in read_only:
+                return False
+            if executable == "git" and len(tokens) > 1:
+                if tokens[1] not in {"diff", "log", "rev-parse", "show", "status"}:
+                    return False
+        return True
+
+    def _extract_shell_inner_command(self, command: str) -> str:
+        try:
+            tokens = shlex.split(command)
+        except ValueError:
+            return command
+        if len(tokens) >= 3 and Path(tokens[0]).name in {"bash", "sh", "zsh"} and tokens[1] == "-lc":
+            return tokens[2]
+        return command

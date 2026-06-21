@@ -30,6 +30,33 @@ def test_migration_delete_is_high_or_critical(tmp_path: Path) -> None:
     assert risk.recommended_action in {PolicyAction.REQUIRE_APPROVAL, PolicyAction.BLOCK_AND_ALERT}
 
 
+def test_read_only_shell_command_is_low_risk(tmp_path: Path) -> None:
+    proposal = ToolCallProposal(
+        session_id="ses_test",
+        tool_name="shell.run",
+        params={"command": '/bin/zsh -lc "pwd && rg --files | sed s#/.*## | sort -u"'},
+        confidence=0.8,
+    )
+
+    risk = SemanticRiskClassifier(str(tmp_path)).assess(proposal)
+
+    assert risk.risk_level == RiskLevel.LOW
+    assert risk.recommended_action == PolicyAction.AUTO_EXECUTE
+
+
+def test_destructive_shell_command_is_high_risk(tmp_path: Path) -> None:
+    proposal = ToolCallProposal(
+        session_id="ses_test",
+        tool_name="shell.run",
+        params={"command": "rm -rf backend/migrations"},
+        confidence=0.8,
+    )
+
+    risk = SemanticRiskClassifier(str(tmp_path)).assess(proposal)
+
+    assert risk.risk_level in {RiskLevel.HIGH, RiskLevel.CRITICAL}
+
+
 def test_policy_precedence_over_risk() -> None:
     config = AgentLensConfig(
         policies=[
@@ -44,4 +71,3 @@ def test_policy_precedence_over_risk() -> None:
     decision = PolicyEngine(config).evaluate(proposal)
     assert decision.action == PolicyAction.AUTO_EXECUTE
     assert decision.matched_policy == "safe reads"
-

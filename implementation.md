@@ -24,17 +24,28 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 - Ledger analytics are implemented with `GET /sessions/{id}/analytics`.
 - The frontend renders trust score, approval patterns, risk distribution, and drift history alongside the session timeline.
 - Browser smoke verified analytics panels render and remain visible after approving a pending gate.
+- Append-only JSONL audit persistence is implemented through `AGENTLENS_AUDIT_LOG_PATH`.
+- `GET /audit/events` exposes recent audit entries for local demos.
+- Codex CLI adapter seam is implemented with `codex exec --json --sandbox read-only`, including parser tests for tool-call JSONL events.
+- CLI can run Codex preview mode with `uv run agentlens-demo --codex-prompt "..."`.
+- Real Codex JSONL validation completed: `item.started` events with `item.type = command_execution` are parsed into `shell.run` proposals.
+- Read-only Codex inspection commands now classify as low risk and auto-execute.
+- Real Codex file-change validation completed in a disposable temp workspace: `item.started` events with `item.type = file_change` parse into `fs.write` / `fs.delete` proposals.
+- PostgreSQL-ready SQLAlchemy models and repository seam are implemented in `agentlens.db`.
+- Competition demo script and rubric checklist are available in `scripts/competition_demo.sh` and `docs/competition_demo.md`.
+- Demo summaries are post-processed to plain ASCII English with bounded length and complete punctuation.
+- Full competition demo script was verified end to end.
 
 ## Known Gaps
 
-- PostgreSQL and Redis are documented production targets but the initial implementation uses in-memory storage.
-- Slack approval cards are planned but not implemented in the first scaffold.
-- Real Codex integration is intentionally deferred until the simulator path is stable.
-- OpenAI integration tests require the user to fill `OPENAI_API_KEY` in `.env`.
+- PostgreSQL and Redis are documented production targets but runtime session state is still in-memory.
+- Slack backend integration is implemented, but a real Slack app still needs to be configured for human validation.
+- Runtime API state is still in-memory; PostgreSQL models exist but are not yet wired into FastAPI request handling.
 
 ## Next Steps
 
 1. Review the frontend npm audit finding before forcing dependency changes; the available audit fix is breaking.
 2. Configure a real Slack app and point its Interactivity Request URL at `/integrations/slack/actions`.
-3. Expand persistence from in-memory to PostgreSQL now that the session, gate, Slack, and analytics contracts are stable.
-4. Add a real Codex adapter and competition demo script.
+3. Wire runtime session/gate/timeline state to PostgreSQL using the new SQLAlchemy repository seam.
+4. Configure a real Slack app and validate Slack button clicks against a public tunnel.
+5. Configure live Slack and PostgreSQL services for production-like validation.

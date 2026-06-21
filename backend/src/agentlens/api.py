@@ -109,6 +109,12 @@ def pending_gates() -> list[Gate]:
     return store.pending_gates()
 
 
+@app.get("/audit/events")
+def audit_events(limit: int = 100) -> dict[str, object]:
+    events = store.audit_log.read_all()
+    return {"events": events[-limit:]}
+
+
 @app.post("/gates/{gate_id}/approve")
 def approve_gate(gate_id: str, payload: DecisionPayload) -> Gate:
     return _resolve_gate(gate_id, GateStatus.APPROVED, payload)

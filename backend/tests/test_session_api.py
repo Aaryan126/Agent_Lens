@@ -82,6 +82,19 @@ def test_session_analytics_endpoint(monkeypatch) -> None:
     assert body["risk_distribution"]
 
 
+def test_audit_events_endpoint_returns_recent_events(monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "replace_me")
+    client = TestClient(app)
+    client.post("/demo/session")
+
+    response = client.get("/audit/events?limit=2")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["events"]) <= 2
+    assert body["events"]
+
+
 def test_gate_decision_endpoint_resolves_pending_gate(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "replace_me")
     client = TestClient(app)

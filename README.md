@@ -89,6 +89,13 @@ cd backend
 uv run agentlens-demo --fixture ../examples/demo_session.json --slack
 ```
 
+To run Codex CLI in read-only JSON mode and gate any parsed tool-call proposals:
+
+```bash
+cd backend
+uv run agentlens-demo --codex-prompt "Inspect this repo and describe likely next steps."
+```
+
 ## Local Demo Flow
 
 1. Start the API.
@@ -131,6 +138,48 @@ Supported Slack action IDs:
 The message renderer lives in `agentlens.slack.render_gate_message`. Use the CLI
 `--slack` flag to preview the payload before wiring a real Slack app.
 
+## Codex Adapter
+
+The Codex adapter uses `codex exec --json --sandbox read-only` and treats parsed
+`item.started` / `command_execution` JSONL events as AgentLens `shell.run` proposals.
+Read-only shell inspection commands such as `pwd`, `rg`, `find`, `sed`, `sort`, and safe
+`git` inspection commands are classified as low risk and auto-executed.
+
+For controlled validation in disposable workspaces, the CLI also accepts:
+
+```bash
+uv run agentlens-demo --repo /private/tmp/agentlens-codex-fixture \
+  --codex-sandbox workspace-write \
+  --codex-prompt "Create a harmless probe file."
+```
+
+Real Codex `item.started` / `file_change` events are parsed into `fs.write` or `fs.delete`
+proposals based on each change kind.
+
+## Audit Log
+
+AgentLens writes append-only JSONL audit events to `AGENTLENS_AUDIT_LOG_PATH`.
+Current event types:
+
+- `session_started`
+- `trace_captured`
+- `gate_created`
+- `gate_updated`
+
+Use `GET /audit/events?limit=100` to inspect recent records during local demos.
+
+## Database Layer
+
+`agentlens.db` defines PostgreSQL-ready SQLAlchemy models for:
+
+- `agentlens_sessions`
+- `agentlens_traces`
+- `agentlens_gates`
+- `agentlens_audit_events`
+
+Runtime state still uses the in-memory store plus JSONL audit log. The SQLAlchemy repository
+is the migration seam for moving session/gate/timeline storage into PostgreSQL.
+
 ## Environment Variables
 
 - `OPENAI_API_KEY`: required for real intelligence integration tests and production intelligence calls.
@@ -140,7 +189,18 @@ The message renderer lives in `agentlens.slack.render_gate_message`. Use the CLI
 - `REDIS_URL`: future in-flight state/cache target.
 - `SLACK_BOT_TOKEN`: future Slack approval surface.
 - `SLACK_SIGNING_SECRET`: future Slack request verification.
+- `AGENTLENS_AUDIT_LOG_PATH`: local append-only JSONL audit log path.
 
 ## Status
 
 See `implementation.md` for the current implementation state and `plan.md` for phase-by-phase acceptance gates.
+
+## Competition Demo
+
+Run the local verification and demo preview:
+
+```bash
+./scripts/competition_demo.sh
+```
+
+The judging script and rubric mapping live in `docs/competition_demo.md`.

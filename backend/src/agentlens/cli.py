@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
+from agentlens.adapters.codex_cli import CodexCliAdapter
 from agentlens.schemas import SessionStart, ToolCallProposal
 from agentlens.session import AgentLensSession
 from agentlens.simulator import default_demo_proposals
@@ -28,14 +29,42 @@ def main() -> None:
         action="store_true",
         help="Print Slack Block Kit message JSON for pending gates.",
     )
+    parser.add_argument(
+        "--codex-prompt",
+        default=None,
+        help="Run Codex CLI in read-only JSON mode and gate any parsed tool-call proposals.",
+    )
+    parser.add_argument(
+        "--codex-model",
+        default=None,
+        help="Optional model name to pass to codex exec.",
+    )
+    parser.add_argument(
+        "--codex-sandbox",
+        default="read-only",
+        choices=["read-only", "workspace-write"],
+        help="Sandbox mode to pass to codex exec. Defaults to read-only.",
+    )
     args = parser.parse_args()
 
     session = AgentLensSession.start(
         SessionStart(original_instruction=args.instruction, repo_path=args.repo)
     )
-    proposals = _load_fixture(args.fixture, session.session.id) if args.fixture else default_demo_proposals(
-        session.session.id
-    )
+    if args.codex_prompt:
+        result = CodexCliAdapter().run(
+            prompt=args.codex_prompt,
+            session_id=session.session.id,
+            cwd=args.repo,
+            model=args.codex_model,
+            sandbox=args.codex_sandbox,
+        )
+        if result.stderr:
+            print(result.stderr)
+        proposals = result.proposals
+    elif args.fixture:
+        proposals = _load_fixture(args.fixture, session.session.id)
+    else:
+        proposals = default_demo_proposals(session.session.id)
 
     for proposal in proposals:
         gate = session.propose(proposal)
