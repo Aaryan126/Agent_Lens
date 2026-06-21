@@ -212,6 +212,7 @@ is the migration seam for moving session/gate/timeline storage into PostgreSQL.
 - `AGENTLENS_AUDIT_LOG_PATH`: local append-only JSONL audit log path.
 - `AGENTLENS_STORAGE_BACKEND`: `memory` for local fallback or `postgres` for hosted durable state.
 - `AGENTLENS_CORS_ORIGINS`: comma-separated frontend origins allowed to call the backend.
+- `AGENTLENS_PROJECT_ROOT`: repo path used by hosted demo sessions and risk/dependency scanning.
 
 ## Status
 

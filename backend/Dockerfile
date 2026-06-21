@@ -15,5 +15,6 @@ RUN uv sync --frozen --no-dev
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PORT=8000
+ENV AGENTLENS_PROJECT_ROOT=/app
 
 CMD ["sh", "-c", "uvicorn agentlens.api:app --host 0.0.0.0 --port ${PORT:-8000}"]

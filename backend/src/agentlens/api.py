@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import parse_qs
@@ -41,7 +42,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+PROJECT_ROOT = Path(os.environ.get("AGENTLENS_PROJECT_ROOT", Path(__file__).resolve().parents[3]))
 
 
 class DecisionPayload(BaseModel):
