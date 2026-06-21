@@ -78,6 +78,20 @@ supervised AgentLens session, renders incoming Codex-style tool calls in the dec
 queue, inspector, timeline, policy ledger, Slack surface, and audit views, and lets you
 approve, block, or modify pending gates.
 
+For a real Codex-backed run, start supervision in the web console, then run the command
+shown in the empty review queue from your local checkout. It uses the Codex CLI adapter
+to execute Codex locally, parse real Codex JSON events, and post proposed tool calls into
+the hosted AgentLens session:
+
+```bash
+cd backend
+uv run agentlens-demo \
+  --api-url https://agentlens-api-ggkh.onrender.com \
+  --session-id ses_... \
+  --repo /path/to/your/repo \
+  --codex-prompt "Inspect this repo and propose the next implementation step."
+```
+
 7. Run the simulator demo:
 
 ```bash

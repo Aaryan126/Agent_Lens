@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_AGENTLENS_API_URL ?? "http://127.0.0.1:8000";
 const DEFAULT_SLACK_CHANNEL = "C0BBW328TEF";
+const ACTIVE_SESSION_STORAGE_KEY = "agentlens-active-session-id";
 
 type RiskLevel = "low" | "medium" | "high" | "critical";
 type GateStatus = "pending" | "approved" | "blocked" | "modified" | "auto_executed";
@@ -63,6 +64,12 @@ type DemoResponse = {
     traces: TraceEvent[];
     gates: Gate[];
   };
+};
+
+type TimelineResponse = {
+  session: DemoResponse["session"];
+  traces: TraceEvent[];
+  gates: Gate[];
 };
 
 type CountBucket = {
@@ -133,6 +140,9 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [health, setHealth] = useState<HealthState>("checking");
   const [slackChannel, setSlackChannel] = useState(DEFAULT_SLACK_CHANNEL);
+  const [codexPrompt, setCodexPrompt] = useState(
+    "Inspect this repo and propose the next implementation step.",
+  );
   const [decisionNote, setDecisionNote] = useState("Reviewed in AgentLens hosted console.");
   const [slackResult, setSlackResult] = useState<SlackSendResult | null>(null);
 
@@ -150,6 +160,11 @@ export default function Home() {
     };
   }, []);
 
+  useEffect(() => {
+    const sessionId = window.localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY);
+    if (sessionId) void refreshSession(sessionId);
+  }, []);
+
   const gates = demo?.timeline.gates ?? [];
   const traces = demo?.timeline.traces ?? [];
   const selectedGate = gates.find((gate) => gate.id === selectedGateId) ?? gates[0] ?? null;
@@ -163,25 +178,57 @@ export default function Home() {
   const trustScore = analytics ? Math.round(analytics.trust_score.score * 100) : null;
   const apiHost = API_URL.replace(/^https?:\/\//, "");
 
+  useEffect(() => {
+    if (!demo?.session.id) return;
+    const interval = window.setInterval(() => {
+      void refreshSession(demo.session.id);
+    }, 2500);
+    return () => window.clearInterval(interval);
+  }, [demo?.session.id]);
+
   async function createDemo() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_URL}/demo/session`, { method: "POST" });
+      const response = await fetch(`${API_URL}/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          original_instruction: codexPrompt,
+          repo_path: ".",
+        }),
+      });
       if (!response.ok) throw new Error(`Session failed with ${response.status}`);
-      const nextDemo = (await response.json()) as DemoResponse;
-      setDemo(nextDemo);
-      setSelectedGateId(
-        nextDemo.timeline.gates.find((gate) => gate.status === "pending")?.id ??
-          nextDemo.timeline.gates[0]?.id ??
-          null,
-      );
-      setAnalytics(await fetchAnalytics(nextDemo.session.id));
+      const session = (await response.json()) as DemoResponse["session"];
+      window.localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, session.id);
+      setDemo({ session, gates: [], timeline: { traces: [], gates: [] } });
+      setSelectedGateId(null);
+      setAnalytics(await fetchAnalytics(session.id));
       setActiveView("review");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to start supervision");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function refreshSession(sessionId: string) {
+    try {
+      const response = await fetch(`${API_URL}/sessions/${sessionId}/timeline`);
+      if (!response.ok) return;
+      const timeline = (await response.json()) as TimelineResponse;
+      setDemo((current) => {
+        if (current && current.session.id !== sessionId) return current;
+        return {
+          session: timeline.session,
+          gates: timeline.gates,
+          timeline: { traces: timeline.traces, gates: timeline.gates },
+        };
+      });
+      setSelectedGateId((current) => current ?? timeline.gates[0]?.id ?? null);
+      setAnalytics(await fetchAnalytics(sessionId));
+    } catch {
+      return;
     }
   }
 
@@ -280,11 +327,17 @@ export default function Home() {
                 </p>
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-[auto_170px_auto]">
+              <div className="grid gap-2 lg:grid-cols-[minmax(320px,440px)_160px_170px_120px]">
+                <input
+                  value={codexPrompt}
+                  onChange={(event) => setCodexPrompt(event.target.value)}
+                  className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium outline-none focus:border-neutral-950"
+                  aria-label="Codex task"
+                />
                 <button
                   onClick={createDemo}
                   disabled={loading}
-                  className="h-10 rounded-md bg-neutral-950 px-4 text-sm font-semibold text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-400"
+                  className="h-10 whitespace-nowrap rounded-md bg-neutral-950 px-4 text-sm font-semibold text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-400"
                 >
                   {loading ? "Starting Session" : "Start Supervision"}
                 </button>
@@ -297,7 +350,7 @@ export default function Home() {
                 <button
                   onClick={sendSlackCards}
                   disabled={slackLoading}
-                  className="h-10 rounded-md border border-neutral-300 bg-white px-4 text-sm font-semibold text-neutral-900 hover:border-neutral-950 disabled:cursor-not-allowed disabled:text-neutral-400"
+                  className="h-10 whitespace-nowrap rounded-md border border-neutral-300 bg-white px-4 text-sm font-semibold text-neutral-900 hover:border-neutral-950 disabled:cursor-not-allowed disabled:text-neutral-400"
                 >
                   {slackLoading ? "Sending" : "Send To Slack"}
                 </button>
@@ -331,6 +384,8 @@ export default function Home() {
                 selectedGate={selectedGate}
                 traceByProposal={traceByProposal}
                 loading={loading}
+                apiUrl={API_URL}
+                codexPrompt={codexPrompt}
                 decisionNote={decisionNote}
                 onCreate={createDemo}
                 onSelectGate={setSelectedGateId}
@@ -376,6 +431,8 @@ function ReviewView({
   selectedGate,
   traceByProposal,
   loading,
+  apiUrl,
+  codexPrompt,
   decisionNote,
   onCreate,
   onSelectGate,
@@ -390,6 +447,8 @@ function ReviewView({
   selectedGate: Gate | null;
   traceByProposal: Map<string, TraceEvent>;
   loading: boolean;
+  apiUrl: string;
+  codexPrompt: string;
   decisionNote: string;
   onCreate: () => void;
   onSelectGate: (id: string) => void;
@@ -411,7 +470,13 @@ function ReviewView({
           }
         />
         {gates.length === 0 ? (
-          <EmptyQueue onCreate={onCreate} loading={loading} />
+          <EmptyQueue
+            onCreate={onCreate}
+            loading={loading}
+            sessionId={demo?.session.id ?? null}
+            apiUrl={apiUrl}
+            codexPrompt={codexPrompt}
+          />
         ) : (
           <QueueTable
             gates={gates}
@@ -680,7 +745,22 @@ function QueueTable({
   );
 }
 
-function EmptyQueue({ onCreate, loading }: { onCreate: () => void; loading: boolean }) {
+function EmptyQueue({
+  onCreate,
+  loading,
+  sessionId,
+  apiUrl,
+  codexPrompt,
+}: {
+  onCreate: () => void;
+  loading: boolean;
+  sessionId: string | null;
+  apiUrl: string;
+  codexPrompt: string;
+}) {
+  const command = sessionId
+    ? `cd backend && uv run agentlens-demo --api-url ${apiUrl} --session-id ${sessionId} --repo /path/to/your/repo --codex-prompt ${JSON.stringify(codexPrompt)}`
+    : null;
   const rows = [
     ["Low", "File Read", "Auto Execute", "Read-only inspection enters the ledger."],
     ["Medium", "File Write", "Require Approval", "Source changes receive trajectory and drift analysis."],
@@ -688,27 +768,59 @@ function EmptyQueue({ onCreate, loading }: { onCreate: () => void; loading: bool
   ];
   return (
     <div className="rounded-lg border border-neutral-200 bg-white shadow-sm">
-      <div className="grid gap-0 divide-y divide-neutral-100">
-        {rows.map(([risk, action, policy, note]) => (
-          <div
-            key={action}
-            className="grid gap-3 px-4 py-4 md:grid-cols-[110px_150px_160px_minmax(0,1fr)]"
-          >
-            <span className="text-sm font-semibold">{risk}</span>
-            <span className="text-sm text-neutral-700">{action}</span>
-            <span className="text-sm text-neutral-700">{policy}</span>
-            <span className="text-sm text-neutral-500">{note}</span>
+      {sessionId ? (
+        <div className="grid gap-4 p-4">
+          <div>
+            <p className="text-sm font-semibold">Live session is listening</p>
+            <p className="mt-1 text-sm leading-6 text-neutral-600">
+              Run the adapter from your machine. It executes Codex locally, parses real Codex JSON events,
+              and posts proposed tool calls into this hosted review queue.
+            </p>
           </div>
-        ))}
-      </div>
+          <code className="block overflow-x-auto rounded-md border border-neutral-200 bg-neutral-950 p-3 text-xs leading-6 text-neutral-100">
+            {command}
+          </code>
+          <div className="grid gap-0 divide-y divide-neutral-100 border border-neutral-200">
+            {rows.map(([risk, action, policy, note]) => (
+              <div
+                key={action}
+                className="grid gap-3 px-4 py-3 md:grid-cols-[110px_150px_160px_minmax(0,1fr)]"
+              >
+                <span className="text-sm font-semibold">{risk}</span>
+                <span className="text-sm text-neutral-700">{action}</span>
+                <span className="text-sm text-neutral-700">{policy}</span>
+                <span className="text-sm text-neutral-500">{note}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="grid gap-0 divide-y divide-neutral-100">
+          {rows.map(([risk, action, policy, note]) => (
+            <div
+              key={action}
+              className="grid gap-3 px-4 py-4 md:grid-cols-[110px_150px_160px_minmax(0,1fr)]"
+            >
+              <span className="text-sm font-semibold">{risk}</span>
+              <span className="text-sm text-neutral-700">{action}</span>
+              <span className="text-sm text-neutral-700">{policy}</span>
+              <span className="text-sm text-neutral-500">{note}</span>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="flex flex-col gap-3 border-t border-neutral-200 bg-neutral-50 px-4 py-4 md:flex-row md:items-center md:justify-between">
-        <p className="text-sm text-neutral-600">Waiting for Codex to propose an action that needs review.</p>
+        <p className="text-sm text-neutral-600">
+          {sessionId
+            ? "Polling for live Codex tool-call proposals."
+            : "Start a session to listen for Codex tool-call proposals."}
+        </p>
         <button
           onClick={onCreate}
           disabled={loading}
           className="h-10 rounded-md bg-neutral-950 px-4 text-sm font-semibold text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-400"
         >
-          {loading ? "Starting Session" : "Start Supervision"}
+          {loading ? "Starting Session" : sessionId ? "New Session" : "Start Supervision"}
         </button>
       </div>
     </div>

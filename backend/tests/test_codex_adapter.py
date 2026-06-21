@@ -1,6 +1,10 @@
 import subprocess
+from types import SimpleNamespace
+
+import httpx
 
 from agentlens.adapters.codex_cli import CodexCliAdapter, parse_codex_jsonl
+from agentlens.cli import _run_remote
 
 
 def test_parse_codex_jsonl_extracts_tool_call_proposal() -> None:
@@ -77,3 +81,61 @@ def test_codex_cli_adapter_builds_read_only_json_command(tmp_path) -> None:
     assert captured["command"][:3] == ["codex", "exec", "--json"]
     assert "--sandbox" in captured["command"]
     assert "workspace-write" in captured["command"]
+
+
+def test_remote_codex_mode_posts_parsed_proposals(monkeypatch, tmp_path) -> None:
+    requests: list[tuple[str, str, dict[str, object]]] = []
+
+    class FakeClient:
+        def __init__(self, timeout: int) -> None:
+            self.timeout = timeout
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def post(self, url: str, json: dict[str, object]):
+            requests.append(("POST", url, json))
+            request = httpx.Request("POST", url)
+            if url.endswith("/sessions"):
+                return httpx.Response(200, json={"id": "ses_remote"}, request=request)
+            return httpx.Response(
+                200,
+                json={"id": "gate_1", "status": "auto_executed"},
+                request=request,
+            )
+
+    def fake_run(self, **kwargs):
+        class Result:
+            stderr = ""
+            proposals = parse_codex_jsonl(
+                [
+                    '{"type":"item.started","item":{"type":"command_execution","command":"pwd","status":"in_progress"}}'
+                ],
+                session_id=kwargs["session_id"],
+            )
+
+        return Result()
+
+    monkeypatch.setattr(httpx, "Client", FakeClient)
+    monkeypatch.setattr(CodexCliAdapter, "run", fake_run)
+
+    args = SimpleNamespace(
+        api_url="https://agentlens.example",
+        session_id=None,
+        instruction="Inspect the repo.",
+        repo=str(tmp_path),
+        codex_prompt="Run pwd.",
+        codex_model=None,
+        codex_sandbox="read-only",
+        fixture=None,
+    )
+
+    _run_remote(args)
+
+    assert requests[0][1] == "https://agentlens.example/sessions"
+    assert requests[1][1] == "https://agentlens.example/sessions/ses_remote/tool-calls"
+    assert requests[1][2]["session_id"] == "ses_remote"
+    assert requests[1][2]["tool_name"] == "shell.run"

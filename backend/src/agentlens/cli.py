@@ -4,6 +4,8 @@ import argparse
 import json
 from pathlib import Path
 
+import httpx
+
 from agentlens.adapters.codex_cli import CodexCliAdapter
 from agentlens.schemas import SessionStart, ToolCallProposal
 from agentlens.session import AgentLensSession
@@ -51,7 +53,21 @@ def main() -> None:
         choices=["read-only", "workspace-write"],
         help="Sandbox mode to pass to codex exec. Defaults to read-only.",
     )
+    parser.add_argument(
+        "--api-url",
+        default=None,
+        help="Optional AgentLens API URL. When set, parsed Codex proposals are posted to the API.",
+    )
+    parser.add_argument(
+        "--session-id",
+        default=None,
+        help="Existing AgentLens session ID to use with --api-url.",
+    )
     args = parser.parse_args()
+
+    if args.api_url:
+        _run_remote(args)
+        return
 
     session = AgentLensSession.start(
         SessionStart(original_instruction=args.instruction, repo_path=args.repo)
@@ -98,6 +114,59 @@ def main() -> None:
                 gate=gate,
             )
             print(json.dumps({"slack_posted": True, "channel": result.get("channel"), "ts": result.get("ts")}, indent=2))
+
+
+def _run_remote(args: argparse.Namespace) -> None:
+    api_url = str(args.api_url).rstrip("/")
+    with httpx.Client(timeout=180) as client:
+        session_id = args.session_id
+        if session_id is None:
+            response = client.post(
+                f"{api_url}/sessions",
+                json={
+                    "original_instruction": args.instruction,
+                    "repo_path": str(Path(args.repo)),
+                },
+            )
+            response.raise_for_status()
+            session_id = response.json()["id"]
+            print(json.dumps({"session_id": session_id, "created": True}, indent=2))
+
+        if args.codex_prompt:
+            result = CodexCliAdapter().run(
+                prompt=args.codex_prompt,
+                session_id=session_id,
+                cwd=args.repo,
+                model=args.codex_model,
+                sandbox=args.codex_sandbox,
+            )
+            if result.stderr:
+                print(result.stderr)
+            proposals = result.proposals
+        elif args.fixture:
+            proposals = _load_fixture(args.fixture, session_id)
+        else:
+            proposals = default_demo_proposals(session_id)
+
+        for proposal in proposals:
+            response = client.post(
+                f"{api_url}/sessions/{session_id}/tool-calls",
+                json=proposal.model_dump(mode="json"),
+            )
+            response.raise_for_status()
+            gate = response.json()
+            print(
+                json.dumps(
+                    {
+                        "session_id": session_id,
+                        "proposal_id": proposal.id,
+                        "tool": proposal.tool_name,
+                        "gate_id": gate["id"],
+                        "gate_status": gate["status"],
+                    },
+                    indent=2,
+                )
+            )
 
 
 def _load_fixture(path: str, session_id: str) -> list[ToolCallProposal]:

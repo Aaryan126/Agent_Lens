@@ -52,8 +52,10 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 - Final frontend polish pass replaced the marketing-style demo page with a production-style operator console: persistent dark sidebar, compact topbar controls, status metrics, decision queue table, right-side inspector, timeline, and ledger analytics.
 - The frontend revamp is deployed at `https://frontend-ashy-mu-csvn2wfbmk.vercel.app` and was smoke-tested against the hosted Render backend: backend status rendered online, `Run Demo Session` created a real session, queue/inspector/analytics populated, and no horizontal overflow was detected at 1440px desktop or 390px mobile widths.
 - The hosted console main workspace was tightened again for production presentation: controlled max width, compact metric cards, aligned review grid, smaller inspector empty state, and working sidebar sections for Trajectory, Policy Ledger, Slack Surface, and Audit Events.
-- The primary UI flow now presents itself as a real supervision workflow rather than a toy demo: the public console uses `Live Review`, `Start Supervision`, and Codex-action waiting states while still calling the existing backend session fixture endpoint under the hood for judging reliability.
-- Latest hosted smoke passed: every sidebar section switched content, `Run Demo Session` populated real hosted backend data, and no horizontal overflow was detected on desktop or mobile.
+- The primary UI flow now presents itself as a real supervision workflow rather than a toy demo: the public console uses `Live Review`, `Start Supervision`, and Codex-action waiting states.
+- Start Supervision now creates an empty real AgentLens session through `POST /sessions` and polls the timeline instead of replaying the fixture. The empty queue shows a session-specific adapter command for posting real local Codex CLI events into the hosted review queue.
+- The CLI supports remote posting with `--api-url` and `--session-id`, so `uv run agentlens-demo --codex-prompt ...` can run Codex locally and submit parsed tool-call proposals to the hosted backend.
+- Latest hosted smoke passed: every sidebar section switched content, `Start Supervision` created a real hosted session, remote CLI posting populated the review queue, and no horizontal overflow was detected on desktop or mobile.
 
 ## Known Gaps
 
