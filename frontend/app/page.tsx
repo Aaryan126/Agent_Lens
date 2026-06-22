@@ -196,11 +196,16 @@ export default function Home() {
 
   const gates = demo?.timeline.gates ?? [];
   const traces = demo?.timeline.traces ?? [];
-  const selectedGate = gates.find((gate) => gate.id === selectedGateId) ?? gates[0] ?? null;
   const traceByProposal = useMemo(
     () => new Map(traces.map((trace) => [trace.proposal_id, trace])),
     [traces],
   );
+  const selectedGate =
+    gates.find((gate) => gate.id === selectedGateId)
+    ?? gates.find((gate) => gate.status === "pending")
+    ?? gates.find((gate) => !isInspectionGate(gate, traceByProposal.get(gate.proposal_id)))
+    ?? gates[0]
+    ?? null;
   const pendingCount = gates.filter((gate) => gate.status === "pending").length;
   const criticalCount = gates.filter((gate) => gate.risk_assessment.risk_level === "critical").length;
   const resolvedCount = gates.filter((gate) => gate.status !== "pending").length;
@@ -238,7 +243,13 @@ export default function Home() {
           timeline: { traces: timeline.traces, gates: timeline.gates },
         };
       });
-      setSelectedGateId((current) => current ?? timeline.gates[0]?.id ?? null);
+      setSelectedGateId((current) => {
+        const existing = timeline.gates.find((gate) => gate.id === current);
+        const firstPending = timeline.gates.find((gate) => gate.status === "pending");
+        if (!existing) return firstPending?.id ?? timeline.gates[0]?.id ?? null;
+        if (existing.status !== "pending" && firstPending) return firstPending.id;
+        return current;
+      });
       setAnalytics(await fetchAnalytics(targetApiUrl, sessionId));
     } catch {
       return;
@@ -937,7 +948,7 @@ function Inspector({
   }
 
   const card = gate.intelligence_card;
-  const disabled = gate.status !== "pending";
+  const canDecide = gate.status === "pending";
   return (
     <aside className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm xl:sticky xl:top-5 xl:self-start">
       <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Inspector</p>
@@ -1050,45 +1061,44 @@ function Inspector({
         </Section>
       ) : null}
 
-      <label className="mt-5 block text-xs font-semibold uppercase tracking-wide text-neutral-500" htmlFor="decision-note">
-        Gate Decision Note
-      </label>
-      <input
-        id="decision-note"
-        value={decisionNote}
-        onChange={(event) => onDecisionNote(event.target.value)}
-        className="mt-2 h-10 w-full rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-950"
-      />
-      <div className="mt-4 grid grid-cols-3 gap-2">
-        <button
-          onClick={() => onDecision(gate, "approve")}
-          disabled={disabled}
-          className="h-10 rounded-md bg-neutral-950 text-sm font-semibold text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500"
-        >
-          Approve Gate
-        </button>
-        <button
-          onClick={() => onDecision(gate, "block")}
-          disabled={disabled}
-          className="h-10 rounded-md border border-red-700 text-sm font-semibold text-red-800 hover:bg-red-50 disabled:cursor-not-allowed disabled:border-neutral-200 disabled:text-neutral-400"
-        >
-          Block Gate
-        </button>
-        <button
-          onClick={() => onDecision(gate, "modify")}
-          disabled={disabled}
-          className="h-10 rounded-md border border-neutral-300 text-sm font-semibold text-neutral-800 hover:border-neutral-950 disabled:cursor-not-allowed disabled:border-neutral-200 disabled:text-neutral-400"
-        >
-          Modify Gate
-        </button>
-      </div>
-      {gate.status === "pending" ? (
-        <p className="mt-3 text-xs leading-5 text-neutral-500">
-          In local hook mode, Codex waits briefly for this AgentLens gate. Approval lets the
-          current action continue; block or timeout denies it.
-        </p>
+      {canDecide ? (
+        <>
+          <label className="mt-5 block text-xs font-semibold uppercase tracking-wide text-neutral-500" htmlFor="decision-note">
+            Gate Decision Note
+          </label>
+          <input
+            id="decision-note"
+            value={decisionNote}
+            onChange={(event) => onDecisionNote(event.target.value)}
+            className="mt-2 h-10 w-full rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-950"
+          />
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <button
+              onClick={() => onDecision(gate, "approve")}
+              className="h-10 rounded-md bg-neutral-950 text-sm font-semibold text-white hover:bg-neutral-800"
+            >
+              Approve Gate
+            </button>
+            <button
+              onClick={() => onDecision(gate, "block")}
+              className="h-10 rounded-md border border-red-700 text-sm font-semibold text-red-800 hover:bg-red-50"
+            >
+              Block Gate
+            </button>
+            <button
+              onClick={() => onDecision(gate, "modify")}
+              className="h-10 rounded-md border border-neutral-300 text-sm font-semibold text-neutral-800 hover:border-neutral-950"
+            >
+              Modify Gate
+            </button>
+          </div>
+          <p className="mt-3 text-xs leading-5 text-neutral-500">
+            In local hook mode, this gate records your decision. Some Codex TUI hook paths may
+            have already executed; use the ledger status to confirm what happened.
+          </p>
+        </>
       ) : (
-        <p className="mt-3 text-xs leading-5 text-neutral-500">
+        <p className="mt-5 border-t border-neutral-200 pt-4 text-xs leading-5 text-neutral-500">
           This gate is resolved in the AgentLens ledger.
         </p>
       )}

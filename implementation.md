@@ -79,22 +79,23 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 - Hook mode now has first-pass enforcement. `agentlens-hook` posts a proposal, allows auto-executed gates, exits non-zero for blocked gates, and waits up to `AGENTLENS_APPROVAL_TIMEOUT_SECONDS` for pending gates to be approved/modified in the dashboard. `AGENTLENS_ENFORCE_APPROVALS=0` keeps mirror-only behavior for troubleshooting.
 - The frontend inspector now labels buttons as gate decisions and explains that local hook mode waits briefly for approval, block, or timeout.
 - Validation passed after enforcement changes: `uv run pytest` reported 57 passed, `uv run ruff check .` passed, and frontend `npm run build` passed.
+- Live validation confirmed read-only Codex repo inspection now collapses into an auto-executed inspection batch. A normal TUI README edit still executed before a dashboard approval decision, so TUI hook enforcement is now documented as best-effort and tool/event dependent. The inspector now hides decision controls for resolved gates and auto-selects pending gates when they appear.
 
 ## Known Gaps
 
 - Slack backend integration is implemented and live-validated through ngrok.
 - PostgreSQL runtime storage is implemented and live-validated against Render Postgres.
 - Redis remains a documented future target for in-flight state/cache, but it is not required for the hosted demo path yet.
-- Codex hook payload shapes have been hardened against the observed local flow, but broader MCP/edit-tool payload variants should still be collected from more live sessions.
-- Deep attachment to an arbitrary already-running Codex TUI should still target Codex's app-server/remote-control protocol when that surface stabilizes.
+- Codex hook payload shapes have been hardened against the observed local flow, but normal TUI edit/apply_patch enforcement is not yet guaranteed before execution.
+- Deep attachment to an arbitrary already-running Codex TUI should still target Codex's app-server/remote-control protocol when that surface stabilizes; that is the likely path for reliable pre-execution pause/resume.
 
 ## Next Steps
 
 1. Warm `https://agentlens-api-ggkh.onrender.com/health` before judging because Render free web services sleep after idle.
 2. Renew or upgrade Render Postgres before July 21, 2026 if the demo must remain live.
 3. Re-trust the updated Codex hooks with `/hooks`, then run one fresh live Codex TUI session and confirm read-only inspection collapses without pending gates.
-4. Ask Codex for a small file edit, approve it in AgentLens within the timeout, and confirm Codex continues.
-5. Ask Codex for a destructive action, block it in AgentLens, and confirm Codex does not execute it.
-6. Capture additional hook payload shapes for apply_patch, Edit/Write, and MCP tools to improve normalization.
-7. Investigate Codex's app-server protocol for a deeper future integration that can stream turn/item events with richer state than hooks.
+4. Capture additional hook payload shapes for apply_patch, Edit/Write, and MCP tools to determine which paths can be blocked pre-execution.
+5. Investigate Codex's app-server protocol for a deeper integration that can stream turn/item events and provide reliable pre-execution pause/resume.
+6. Keep `agentlens-codex` as the reliable enforceable demo path when strict gating is required.
+7. Ask Codex for a destructive action in hook mode and record whether Codex honors the failed hook before claiming hard enforcement for that event type.
 8. Review the frontend npm audit finding before forcing dependency changes; the available audit fix is breaking.

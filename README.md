@@ -115,6 +115,9 @@ protocol, not by scraping terminal output.
 AgentLens also includes a project-local Codex hook config in `.codex/hooks.json`.
 This lets normal interactive Codex sessions mirror tool-use events into the local
 AgentLens guard without using `agentlens-codex`.
+In local hook mode, AgentLens records risky Codex tool calls and can attempt to hold
+pending gates while the dashboard records an approve, block, or modify decision. Treat
+this TUI hook path as best-effort until each Codex tool event type is live-validated.
 
 1. Start the local guard:
 
@@ -150,12 +153,13 @@ local hook state is stored under `.agentlens/` and ignored by git.
 If you restart `agentlens-guard`, the hook automatically creates a fresh AgentLens
 session if the remembered local session no longer exists.
 
-Read-only inspection commands are auto-executed and collapsed in the dashboard. Risky
-hooked actions are enforcement-gated: the hook posts the proposal, waits up to
-`AGENTLENS_APPROVAL_TIMEOUT_SECONDS` seconds for an AgentLens decision, then exits
-successfully only for approved/modified/auto-executed gates. Blocked or timed-out gates
-return a non-zero hook exit so Codex does not run the action. Set
-`AGENTLENS_ENFORCE_APPROVALS=0` only when you want mirror-only ledger behavior.
+Read-only inspection commands are auto-executed and collapsed in the dashboard. For risky
+hooked actions, the hook posts the proposal and can wait up to
+`AGENTLENS_APPROVAL_TIMEOUT_SECONDS` seconds for an AgentLens decision. Approved,
+modified, and auto-executed gates exit successfully; blocked or timed-out gates return a
+non-zero hook exit. Normal Codex TUI behavior can vary by tool/event type, so use this as
+best-effort enforcement until the specific path is validated. Set
+`AGENTLENS_ENFORCE_APPROVALS=0` for mirror-only ledger behavior.
 
 For hosted judging or remote viewing, start supervision in the web console, then run the
 command shown in the empty review queue from your local checkout. It uses the Codex CLI

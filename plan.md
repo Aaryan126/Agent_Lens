@@ -201,6 +201,11 @@ dependency blast-radius checks. Pending hooked actions wait briefly for AgentLen
 approval; approved/modified gates pass, blocked or timed-out gates fail the hook with a
 non-zero exit. The UI now labels these controls as gate decisions instead of generic
 Codex controls.
+Live validation confirmed the read-only collapse, but a normal Codex TUI README edit
+executed before a dashboard decision. Hook-mode enforcement is therefore documented as
+best-effort and tool/event dependent until apply_patch/Edit/Write paths are validated or
+replaced with an app-server based pause/resume integration. The inspector now hides
+decision controls for resolved gates and auto-focuses pending gates.
 
 ## Phase 10: Intelligence Depth and Cost-Aware Routing
 
@@ -232,4 +237,6 @@ suite `26 passed`, real OpenAI integration tests passed, `uv run ruff check .` p
 and `npm run build` passed. After the hook timeout fix, `.codex/hooks.json` parsed
 successfully and `uv run pytest tests/test_codex_hook.py` passed. After hook enforcement
 and read-only risk fixes, `uv run pytest` reported 57 passed, `uv run ruff check .`
-passed, and frontend `npm run build` passed.
+passed, and frontend `npm run build` passed. After live TUI validation, the UI was
+tightened to hide resolved-gate controls and the docs were corrected to avoid
+overpromising hard pre-execution enforcement for every normal TUI tool path.
