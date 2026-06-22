@@ -18,6 +18,22 @@ type IntelligenceCard = {
   confidence: number;
   trajectory_preview: string;
   drift_flag: string | null;
+  full_trajectory: {
+    next_steps: { step: number; action: string; rationale: string }[];
+    commitment_point: string;
+    confidence: number;
+    rationale: string;
+  } | null;
+  confidence_evidence: { label: string; impact: number; detail: string }[];
+  dependency_evidence: {
+    path: string;
+    referenced_by: string[];
+    config_references: string[];
+    exists: boolean | null;
+    summary: string;
+  }[];
+  drift_score: number | null;
+  model_roles: Record<string, string>;
 };
 
 type PolicyDecision = {
@@ -948,6 +964,19 @@ function Inspector({
       </Section>
       <Section title="Trajectory">
         <p>{card?.trajectory_preview ?? "No trajectory preview available."}</p>
+        {card?.full_trajectory?.next_steps?.length ? (
+          <ol className="mt-3 flex flex-col gap-2">
+            {card.full_trajectory.next_steps.map((step) => (
+              <li key={`${step.step}-${step.action}`} className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
+                <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                  Step {step.step}
+                </span>
+                <p className="mt-1 text-sm font-semibold text-neutral-950">{step.action}</p>
+                <p className="mt-1 text-xs leading-5 text-neutral-600">{step.rationale}</p>
+              </li>
+            ))}
+          </ol>
+        ) : null}
       </Section>
       <Section title="Evidence">
         <ul className="flex flex-col gap-2">
@@ -956,9 +985,63 @@ function Inspector({
           ))}
         </ul>
       </Section>
+      {card?.dependency_evidence?.length ? (
+        <Section title="Dependency Evidence">
+          <div className="flex flex-col gap-2">
+            {card.dependency_evidence.map((item) => (
+              <div key={item.path} className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
+                <p className="truncate text-sm font-semibold text-neutral-950">{item.path}</p>
+                <p className="mt-1 text-xs leading-5 text-neutral-600">{item.summary}</p>
+                {item.referenced_by.length ? (
+                  <p className="mt-1 truncate text-xs text-neutral-500">
+                    Code: {item.referenced_by.slice(0, 3).join(", ")}
+                  </p>
+                ) : null}
+                {item.config_references.length ? (
+                  <p className="mt-1 truncate text-xs text-neutral-500">
+                    Config/docs: {item.config_references.slice(0, 3).join(", ")}
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </Section>
+      ) : null}
+      {card?.confidence_evidence?.length ? (
+        <Section title="Confidence Calibration">
+          <div className="flex flex-col gap-2">
+            {card.confidence_evidence.map((item) => (
+              <div key={`${item.label}-${item.detail}`} className="grid grid-cols-[64px_minmax(0,1fr)] gap-3">
+                <span className={item.impact >= 0 ? "text-sm font-semibold text-emerald-700" : "text-sm font-semibold text-red-700"}>
+                  {item.impact >= 0 ? "+" : ""}
+                  {Math.round(item.impact * 100)}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-neutral-950">{item.label}</span>
+                  <span className="block text-xs leading-5 text-neutral-600">{item.detail}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </Section>
+      ) : null}
       {card?.drift_flag ? (
         <Section title="Drift">
           <p>{card.drift_flag}</p>
+          {card.drift_score !== null && card.drift_score !== undefined ? (
+            <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+              Alignment {Math.round(card.drift_score * 100)}%
+            </p>
+          ) : null}
+        </Section>
+      ) : null}
+      {card?.model_roles && Object.keys(card.model_roles).length ? (
+        <Section title="Model Routing">
+          <div className="grid grid-cols-2 gap-2">
+            {Object.entries(card.model_roles).map(([key, value]) => (
+              <Fact key={key} label={titleCase(key)} value={titleCase(value)} />
+            ))}
+          </div>
         </Section>
       ) : null}
       {gate.human_reason ? (

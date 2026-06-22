@@ -2,7 +2,7 @@
 
 AgentLens is a judgment layer for AI coding agents. It intercepts proposed tool calls, enriches them with codebase and session context, decides whether a human should review them, and records the full session in an audit-friendly ledger.
 
-The first build is local-first: a simulator emits tool-call proposals through the same adapter interface that a real Codex integration will use later. This lets the risk, policy, OpenAI intelligence, approval, and ledger layers become useful before taking dependency on Codex-specific hooks.
+The current build is local-first: Codex can run normally in the terminal while project-local hooks mirror proposed tool calls into a local AgentLens guard. The hosted demo path remains available for judging, Slack validation, and remote review.
 
 ## Current Architecture
 
@@ -23,6 +23,8 @@ The first build is local-first: a simulator emits tool-call proposals through th
 - Score reversibility and blast radius with a deterministic baseline.
 - Gate risky actions for local approval.
 - Call real OpenAI structured-output intelligence for gated actions when `OPENAI_API_KEY` is configured.
+- Route lightweight summarization to a nano model while reserving the strong model for consequential gated actions.
+- Explain decisions with trajectory, drift, confidence factors, dependency/reference evidence, and concise translation.
 
 ## Setup
 
@@ -140,8 +142,10 @@ codex
 
 If Codex says hooks need review, type `/hooks`, inspect the AgentLens hook commands, and
 trust them for this project. After that, use Codex normally. `PreToolUse` and
-`PermissionRequest` hook events are mirrored into AgentLens through `uv run
-agentlens-hook`, while local hook state is stored under `.agentlens/` and ignored by git.
+`UserPromptSubmit` starts a fresh AgentLens session for each new task, while `PreToolUse`
+and `PermissionRequest` hook events are mirrored into AgentLens through `uv run
+agentlens-hook`. Duplicate hook notifications for the same tool payload are suppressed,
+and local hook state is stored under `.agentlens/` and ignored by git.
 If you restart `agentlens-guard`, the hook automatically creates a fresh AgentLens
 session if the remembered local session no longer exists.
 
@@ -209,8 +213,25 @@ For a faster CLI-only check, run `uv run agentlens-demo --fixture ../examples/de
 from `backend/`.
 
 With `OPENAI_API_KEY` configured, gated demo actions produce live trajectory, drift,
-confidence, and translation output. Auto-executed low-risk actions use a lightweight
-ledger card to avoid unnecessary model calls.
+confidence, dependency evidence, and translation output. Auto-executed low-risk actions
+use a lightweight ledger card to avoid unnecessary model calls.
+
+## Intelligence Layer and Model Routing
+
+AgentLens builds a typed decision context for each proposal: original instruction,
+recent traces, prior gate summaries, git snapshot, policy decision, semantic risk, and
+dependency/reference evidence. Gated actions use that context to produce:
+
+- Counterfactual trajectory with likely next steps and a commitment point.
+- Embedding-based goal drift score.
+- Confidence calibration factors that show why confidence moved up or down.
+- Dependency evidence from Python and JavaScript/TypeScript imports plus config/docs references.
+- A concise approval-card summary for Slack and the web inspector.
+
+`OPENAI_MODEL` is the strong model for consequential actions. `OPENAI_NANO_MODEL` is used
+for cheaper summaries or low-risk work. Embeddings still use `OPENAI_EMBEDDING_MODEL`.
+This keeps the max-intelligence path available without spending strong-model calls on
+simple read-only inspection.
 
 The review console uses `POST /demo/session` to create a sample session and decision
 endpoints under `/gates/{id}` to approve, block, or modify pending gates.
@@ -279,15 +300,16 @@ Use `GET /audit/events?limit=100` to inspect recent records during local demos.
 - `agentlens_gates`
 - `agentlens_audit_events`
 
-Runtime state still uses the in-memory store plus JSONL audit log. The SQLAlchemy repository
-is the migration seam for moving session/gate/timeline storage into PostgreSQL.
+Runtime state can use the in-memory store for local fallback or PostgreSQL for durable
+hosted state with `AGENTLENS_STORAGE_BACKEND=postgres`.
 
 ## Environment Variables
 
 - `OPENAI_API_KEY`: required for real intelligence integration tests and production intelligence calls.
 - `OPENAI_MODEL`: chat/reasoning model for structured outputs.
+- `OPENAI_NANO_MODEL`: cheaper chat/reasoning model for lightweight summaries and low-risk work.
 - `OPENAI_EMBEDDING_MODEL`: embedding model for goal drift.
-- `DATABASE_URL`: future PostgreSQL persistence target.
+- `DATABASE_URL`: PostgreSQL persistence target when `AGENTLENS_STORAGE_BACKEND=postgres`.
 - `REDIS_URL`: future in-flight state/cache target.
 - `SLACK_BOT_TOKEN`: Slack bot token for posting approval cards.
 - `SLACK_SIGNING_SECRET`: Slack request verification secret.

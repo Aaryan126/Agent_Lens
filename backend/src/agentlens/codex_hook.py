@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -40,6 +41,18 @@ def main() -> None:
     api_url = args.api_url.rstrip("/")
     repo = str(Path(args.repo).expanduser().resolve())
     session_file = Path(args.session_file)
+
+    if args.event == "UserPromptSubmit":
+        _create_session(
+            api_url=api_url,
+            session_file=session_file,
+            repo=repo,
+            payload=payload,
+            event_name=args.event,
+            reset_recent=True,
+        )
+        return
+
     session_id = os.environ.get("AGENTLENS_SESSION_ID") or _load_session_id(session_file)
     if session_id is None:
         session_id = _create_session(
@@ -52,9 +65,13 @@ def main() -> None:
     proposal = _proposal_from_hook(payload, event_name=args.event, session_id=session_id)
     if proposal is None:
         return
+    signature = _proposal_signature(proposal)
+    if _is_duplicate(session_file, signature):
+        return
 
     try:
         _post_proposal(api_url=api_url, session_id=session_id, proposal=proposal)
+        _remember_signature(session_file, signature)
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code != 404 or os.environ.get("AGENTLENS_SESSION_ID"):
             print(f"AgentLens hook mirror failed: {exc}", file=sys.stderr)
@@ -69,6 +86,7 @@ def main() -> None:
             )
             proposal.session_id = session_id
             _post_proposal(api_url=api_url, session_id=session_id, proposal=proposal)
+            _remember_signature(session_file, _proposal_signature(proposal))
         except Exception as retry_exc:
             print(f"AgentLens hook mirror retry failed: {retry_exc}", file=sys.stderr)
     except Exception as exc:
@@ -96,6 +114,19 @@ def _load_session_id(session_file: Path) -> str | None:
     return None
 
 
+def _load_session_state(session_file: Path) -> dict[str, Any]:
+    try:
+        stored = json.loads(session_file.read_text(encoding="utf-8"))
+        return stored if isinstance(stored, dict) else {}
+    except Exception:
+        return {}
+
+
+def _write_session_state(session_file: Path, state: dict[str, Any]) -> None:
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+    session_file.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+
 def _create_session(
     *,
     api_url: str,
@@ -103,6 +134,7 @@ def _create_session(
     repo: str,
     payload: dict[str, Any],
     event_name: str,
+    reset_recent: bool = False,
 ) -> str:
     session_file = Path(session_file)
     original_instruction = _find_first_string(
@@ -120,11 +152,10 @@ def _create_session(
         response.raise_for_status()
         session_id = str(response.json()["id"])
 
-    session_file.parent.mkdir(parents=True, exist_ok=True)
-    session_file.write_text(
-        json.dumps({"session_id": session_id, "api_url": api_url}, indent=2),
-        encoding="utf-8",
-    )
+    state = {"session_id": session_id, "api_url": api_url, "recent_proposals": []}
+    if not reset_recent:
+        state["recent_proposals"] = _load_session_state(session_file).get("recent_proposals", [])[-20:]
+    _write_session_state(session_file, state)
     return session_id
 
 
@@ -134,6 +165,29 @@ def _post_proposal(*, api_url: str, session_id: str, proposal: ToolCallProposal)
             f"{api_url}/sessions/{session_id}/tool-calls",
             json=proposal.model_dump(mode="json"),
         ).raise_for_status()
+
+
+def _proposal_signature(proposal: ToolCallProposal) -> str:
+    payload = {
+        "tool_name": proposal.tool_name,
+        "params": proposal.params,
+    }
+    raw = json.dumps(payload, sort_keys=True, default=str)
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _is_duplicate(session_file: Path, signature: str) -> bool:
+    recent = _load_session_state(session_file).get("recent_proposals", [])
+    return signature in recent
+
+
+def _remember_signature(session_file: Path, signature: str) -> None:
+    state = _load_session_state(session_file)
+    recent = [item for item in state.get("recent_proposals", []) if isinstance(item, str)]
+    if signature not in recent:
+        recent.append(signature)
+    state["recent_proposals"] = recent[-30:]
+    _write_session_state(session_file, state)
 
 
 def _proposal_from_hook(

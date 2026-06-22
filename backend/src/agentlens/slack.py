@@ -205,8 +205,24 @@ def update_gate_message(
 
 
 def render_explain_message(gate: Gate) -> dict[str, Any]:
+    card = gate.intelligence_card
     evidence = "\n".join(f"- {item}" for item in gate.risk_assessment.evidence)
     affected = ", ".join(gate.risk_assessment.affected_files) or "No affected files recorded"
+    dependency_lines = []
+    confidence_lines = []
+    if card:
+        dependency_lines = [
+            f"- {item.path}: {item.summary}"
+            for item in card.dependency_evidence[:5]
+        ]
+        confidence_lines = [
+            f"- {item.label}: {item.detail}"
+            for item in card.confidence_evidence[:5]
+        ]
+    trajectory = card.trajectory_preview if card else "No trajectory preview available."
+    suggested = "Inspect references, narrow the change, and retry with a reversible action."
+    if gate.risk_assessment.risk_level == "critical":
+        suggested = "Do not execute this action yet; ask for a reversible migration or rollback plan first."
     return {
         "response_type": "ephemeral",
         "replace_original": False,
@@ -228,6 +244,27 @@ def render_explain_message(gate: Gate) -> dict[str, Any]:
                 },
             },
             {"type": "section", "text": {"type": "mrkdwn", "text": f"*Evidence:*\n{evidence}"}},
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*Trajectory:* {trajectory}"},
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "*Dependency evidence:*\n"
+                    + ("\n".join(dependency_lines) if dependency_lines else "- No dependency references found."),
+                },
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "*Confidence factors:*\n"
+                    + ("\n".join(confidence_lines) if confidence_lines else "- No confidence factors recorded."),
+                },
+            },
+            {"type": "section", "text": {"type": "mrkdwn", "text": f"*Safer next step:* {suggested}"}},
         ],
     }
 

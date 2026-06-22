@@ -60,6 +60,12 @@ class RiskLevel(StrEnum):
     CRITICAL = "critical"
 
 
+class ModelRole(StrEnum):
+    STRONG = "strong"
+    NANO = "nano"
+    EMBEDDING = "embedding"
+
+
 class SessionStart(BaseModel):
     original_instruction: str
     repo_path: str = "."
@@ -124,6 +130,40 @@ class PolicyDecision(BaseModel):
     reason: str
 
 
+class DependencyEvidence(BaseModel):
+    path: str
+    referenced_by: list[str] = Field(default_factory=list)
+    config_references: list[str] = Field(default_factory=list)
+    exists: bool | None = None
+    summary: str
+
+
+class ConfidenceEvidence(BaseModel):
+    label: str
+    impact: float = Field(ge=-1.0, le=1.0)
+    detail: str
+
+
+class SessionGoalSummary(BaseModel):
+    inferred_goal: str
+    recent_actions: list[str] = Field(default_factory=list)
+    open_questions: list[str] = Field(default_factory=list)
+
+
+class DecisionContext(BaseModel):
+    session_id: str
+    original_instruction: str
+    proposal: ToolCallProposal
+    risk: RiskAssessment
+    policy: PolicyDecision
+    recent_traces: list[TraceEvent] = Field(default_factory=list)
+    recent_gates: list[dict[str, Any]] = Field(default_factory=list)
+    git_snapshot: GitSnapshot = Field(default_factory=GitSnapshot)
+    dependency_evidence: list[DependencyEvidence] = Field(default_factory=list)
+    session_goal: SessionGoalSummary
+    visible_metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class TrajectoryStep(BaseModel):
     step: int
     action: str
@@ -134,6 +174,7 @@ class TrajectoryPrediction(BaseModel):
     next_steps: list[TrajectoryStep] = Field(default_factory=list)
     commitment_point: str
     confidence: float = Field(ge=0.0, le=1.0)
+    rationale: str = ""
 
 
 class DriftAssessment(BaseModel):
@@ -145,6 +186,7 @@ class DriftAssessment(BaseModel):
 class ConfidenceAssessment(BaseModel):
     score: float = Field(ge=0.0, le=1.0)
     evidence: list[str] = Field(default_factory=list)
+    factors: list[ConfidenceEvidence] = Field(default_factory=list)
 
 
 class TranslationResult(BaseModel):
@@ -158,6 +200,25 @@ class IntelligenceCard(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     trajectory_preview: str
     drift_flag: str | None = None
+    full_trajectory: TrajectoryPrediction | None = None
+    confidence_evidence: list[ConfidenceEvidence] = Field(default_factory=list)
+    dependency_evidence: list[DependencyEvidence] = Field(default_factory=list)
+    drift_score: float | None = None
+    model_roles: dict[str, str] = Field(default_factory=dict)
+
+
+class ExplainMoreResponse(BaseModel):
+    gate_id: str
+    summary: str | None = None
+    risk: RiskAssessment
+    policy: PolicyDecision
+    trajectory: TrajectoryPrediction | None = None
+    drift_flag: str | None = None
+    confidence: float | None = None
+    confidence_evidence: list[ConfidenceEvidence] = Field(default_factory=list)
+    dependency_evidence: list[DependencyEvidence] = Field(default_factory=list)
+    suggested_modification: str | None = None
+    context_summary: str
 
 
 class Gate(BaseModel):

@@ -6,11 +6,17 @@ import os
 from openai import OpenAI
 
 from agentlens.config import Settings
+from agentlens.model_routing import ModelRouter
 from agentlens.schemas import (
     ConfidenceAssessment,
+    ConfidenceEvidence,
+    DecisionContext,
     DriftAssessment,
     IntelligenceCard,
+    ModelRole,
+    PolicyAction,
     RiskAssessment,
+    RiskLevel,
     ToolCallProposal,
     TrajectoryPrediction,
     TrajectoryStep,
@@ -21,6 +27,7 @@ from agentlens.schemas import (
 class IntelligenceLayer:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+        self.router = ModelRouter(settings)
         self.client = OpenAI(api_key=settings.openai_api_key or os.getenv("OPENAI_API_KEY"))
 
     def fallback_card(
@@ -40,23 +47,31 @@ class IntelligenceLayer:
             confidence=proposal.confidence if proposal.confidence is not None else 0.5,
             trajectory_preview=trajectory_preview
             or "Next action unknown until OpenAI intelligence is configured.",
+            confidence_evidence=self._confidence_factors(proposal, risk),
+            dependency_evidence=[],
+            model_roles={},
         )
 
-    def build_card(
-        self,
-        instruction: str,
-        proposal: ToolCallProposal,
-        risk: RiskAssessment,
-        session_summary: str,
-    ) -> IntelligenceCard:
+    def build_card(self, context: DecisionContext) -> IntelligenceCard:
+        proposal = context.proposal
+        risk = context.risk
         if not self.settings.has_openai_key:
-            return self.fallback_card(proposal, risk)
+            card = self.fallback_card(proposal, risk)
+            card.dependency_evidence = context.dependency_evidence
+            return card
 
-        trajectory = self.trajectory(instruction, proposal)
+        intelligence_role = self.router.role_for_intelligence(
+            proposal,
+            risk.risk_level,
+            context.policy.action,
+        )
+        translation_role = self.router.role_for_summary(risk.risk_level)
+
+        trajectory = self.trajectory(context, role=intelligence_role)
         action_intent = proposal.stated_reason or f"Run {proposal.tool_name} with {proposal.params}"
-        drift = self.drift(instruction, session_summary, action_intent)
+        drift = self.drift(context, action_intent)
         confidence = self.confidence(proposal, risk)
-        translation = self.translation(proposal, risk, trajectory, drift, confidence)
+        translation = self.translation(context, trajectory, drift, confidence, role=translation_role)
 
         first_step = trajectory.next_steps[0].action if trajectory.next_steps else "No likely next step"
         drift_flag = drift.explanation if drift.drift_detected else None
@@ -70,9 +85,18 @@ class IntelligenceLayer:
                 f"Commitment point: {trajectory.commitment_point}."
             ),
             drift_flag=drift_flag,
+            full_trajectory=trajectory,
+            confidence_evidence=confidence.factors,
+            dependency_evidence=context.dependency_evidence,
+            drift_score=drift.score,
+            model_roles={
+                "trajectory": intelligence_role.value,
+                "translation": translation_role.value,
+                "drift": ModelRole.EMBEDDING.value,
+            },
         )
 
-    def trajectory(self, instruction: str, proposal: ToolCallProposal) -> TrajectoryPrediction:
+    def trajectory(self, context: DecisionContext, *, role: ModelRole = ModelRole.STRONG) -> TrajectoryPrediction:
         if not self.settings.has_openai_key:
             return TrajectoryPrediction(
                 next_steps=[
@@ -87,26 +111,26 @@ class IntelligenceLayer:
             )
 
         response = self.client.responses.parse(
-            model=self.settings.openai_model,
+            model=self.router.model_for(role),
             input=[
                 {
                     "role": "system",
-                    "content": "Predict the next three likely agent steps as strict JSON.",
+                    "content": (
+                        "Predict the next three likely coding-agent steps as strict JSON. "
+                        "Use only visible tool metadata, risk evidence, recent actions, and code "
+                        "evidence. Do not reveal hidden chain-of-thought."
+                    ),
                 },
                 {
                     "role": "user",
-                    "content": (
-                        f"Original instruction: {instruction}\n"
-                        f"Tool: {proposal.tool_name}\nParams: {proposal.params}\n"
-                        f"Reason: {proposal.stated_reason}"
-                    ),
+                    "content": self._context_prompt(context),
                 },
             ],
             text_format=TrajectoryPrediction,
         )
         return response.output_parsed
 
-    def drift(self, instruction: str, session_summary: str, action_intent: str) -> DriftAssessment:
+    def drift(self, context: DecisionContext, action_intent: str) -> DriftAssessment:
         if not self.settings.has_openai_key:
             return DriftAssessment(
                 drift_detected=False,
@@ -115,7 +139,13 @@ class IntelligenceLayer:
             )
 
         original_embedding, current_embedding = self._embed_pair(
-            instruction, f"{session_summary}\nCurrent action intent: {action_intent}"
+            context.original_instruction,
+            (
+                f"Inferred session goal: {context.session_goal.inferred_goal}\n"
+                f"Recent actions: {context.session_goal.recent_actions}\n"
+                f"Current action intent: {action_intent}\n"
+                f"Risk evidence: {context.risk.evidence}"
+            ),
         )
         similarity = self._cosine_similarity(original_embedding, current_embedding)
         drift_detected = similarity < 0.62
@@ -134,25 +164,34 @@ class IntelligenceLayer:
 
     def confidence(self, proposal: ToolCallProposal, risk: RiskAssessment) -> ConfidenceAssessment:
         base = proposal.confidence if proposal.confidence is not None else 0.5
-        evidence = ["used provider confidence when available"]
-        if risk.risk_level in {"high", "critical"}:
+        factors = self._confidence_factors(proposal, risk)
+        for factor in factors:
+            base += factor.impact
+        if risk.risk_level in {RiskLevel.HIGH, RiskLevel.CRITICAL}:
             base = min(base, 0.7)
-            evidence.append("capped confidence for high-risk action")
-        return ConfidenceAssessment(score=base, evidence=evidence)
+        base = max(0.05, min(0.98, base))
+        return ConfidenceAssessment(
+            score=base,
+            evidence=[factor.detail for factor in factors],
+            factors=factors,
+        )
 
     def translation(
         self,
-        proposal: ToolCallProposal,
-        risk: RiskAssessment,
+        context: DecisionContext,
         trajectory: TrajectoryPrediction,
         drift: DriftAssessment,
         confidence: ConfidenceAssessment,
+        *,
+        role: ModelRole = ModelRole.NANO,
     ) -> TranslationResult:
+        proposal = context.proposal
+        risk = context.risk
         if not self.settings.has_openai_key:
             return TranslationResult(summary=self.fallback_card(proposal, risk).summary)
 
         response = self.client.responses.parse(
-            model=self.settings.openai_model,
+            model=self.router.model_for(role),
             input=[
                 {
                     "role": "system",
@@ -166,13 +205,7 @@ class IntelligenceLayer:
                 {
                     "role": "user",
                     "content": (
-                        f"Tool: {proposal.tool_name}\n"
-                        f"Params: {proposal.params}\n"
-                        f"Agent stated reason: {proposal.stated_reason}\n"
-                        f"Risk: {risk.risk_level}\n"
-                        f"Reversibility: {risk.reversibility}\n"
-                        f"Blast radius: {risk.blast_radius}\n"
-                        f"Evidence: {risk.evidence}\n"
+                        f"{self._context_prompt(context)}\n"
                         f"Trajectory: {trajectory.model_dump()}\n"
                         f"Drift: {drift.model_dump()}\n"
                         f"Confidence: {confidence.model_dump()}"
@@ -182,6 +215,88 @@ class IntelligenceLayer:
             text_format=TranslationResult,
         )
         return response.output_parsed
+
+    def _context_prompt(self, context: DecisionContext) -> str:
+        proposal = context.proposal
+        recent_traces = [
+            {
+                "tool": trace.tool_name,
+                "params": trace.params,
+                "reason": trace.stated_reason,
+            }
+            for trace in context.recent_traces[-6:]
+        ]
+        return (
+            f"Original instruction: {context.original_instruction}\n"
+            f"Inferred goal: {context.session_goal.inferred_goal}\n"
+            f"Recent actions: {recent_traces}\n"
+            f"Tool: {proposal.tool_name}\n"
+            f"Params: {proposal.params}\n"
+            f"Agent stated reason: {proposal.stated_reason}\n"
+            f"Risk: {context.risk.risk_level}\n"
+            f"Reversibility: {context.risk.reversibility}\n"
+            f"Blast radius: {context.risk.blast_radius}\n"
+            f"Risk evidence: {context.risk.evidence}\n"
+            f"Dependency evidence: {[item.model_dump() for item in context.dependency_evidence]}\n"
+            f"Policy action: {context.policy.action}\n"
+            f"Policy reason: {context.policy.reason}\n"
+            f"Git status: {context.git_snapshot.status_short[:1200]}\n"
+            f"Git diff excerpt: {context.git_snapshot.diff[:2400]}"
+        )
+
+    def _confidence_factors(
+        self, proposal: ToolCallProposal, risk: RiskAssessment
+    ) -> list[ConfidenceEvidence]:
+        factors: list[ConfidenceEvidence] = []
+        if proposal.confidence is None:
+            factors.append(
+                ConfidenceEvidence(
+                    label="Provider Confidence Missing",
+                    impact=-0.1,
+                    detail="The source event did not include a calibrated provider confidence.",
+                )
+            )
+        else:
+            factors.append(
+                ConfidenceEvidence(
+                    label="Provider Confidence Present",
+                    impact=0.05,
+                    detail=f"The source event reported {proposal.confidence:.0%} confidence.",
+                )
+            )
+        if risk.affected_files:
+            factors.append(
+                ConfidenceEvidence(
+                    label="Concrete Files Detected",
+                    impact=0.08,
+                    detail=f"AgentLens identified {len(risk.affected_files)} affected file path(s).",
+                )
+            )
+        else:
+            factors.append(
+                ConfidenceEvidence(
+                    label="No File Target",
+                    impact=-0.05,
+                    detail="The action has no clear affected file, so blast radius is less certain.",
+                )
+            )
+        if risk.risk_level in {RiskLevel.HIGH, RiskLevel.CRITICAL}:
+            factors.append(
+                ConfidenceEvidence(
+                    label="High Consequence Cap",
+                    impact=-0.12,
+                    detail="Confidence is capped for high-risk or critical actions.",
+                )
+            )
+        if risk.recommended_action == PolicyAction.AUTO_EXECUTE:
+            factors.append(
+                ConfidenceEvidence(
+                    label="Policy Alignment",
+                    impact=0.07,
+                    detail="Semantic risk and policy both allow automatic execution.",
+                )
+            )
+        return factors
 
     def _clean_summary(self, summary: str) -> str:
         cleaned = summary.encode("ascii", errors="ignore").decode().strip()

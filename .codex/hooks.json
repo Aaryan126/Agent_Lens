@@ -1,5 +1,18 @@
 {
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$(git rev-parse --show-toplevel)/backend\" && uv run agentlens-hook UserPromptSubmit --repo \"$(git rev-parse --show-toplevel)\" --session-file \"$(git rev-parse --show-toplevel)/.agentlens/codex_hook_session.json\"",
+            "timeout": 10,
+            "statusMessage": "Starting AgentLens supervision session"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash|apply_patch|Edit|Write|mcp__.*",

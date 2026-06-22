@@ -7,13 +7,20 @@ from agentlens.intelligence import IntelligenceLayer
 from agentlens.policy import PolicyEngine
 from agentlens.risk import SemanticRiskClassifier
 from agentlens.schemas import (
+    DecisionContext,
+    DependencyEvidence,
+    ExplainMoreResponse,
     Gate,
     GateStatus,
     PolicyAction,
+    PolicyDecision,
+    RiskAssessment,
     Session,
+    SessionGoalSummary,
     SessionStart,
     Timeline,
     ToolCallProposal,
+    TraceEvent,
 )
 from agentlens.storage import InMemoryStore, store
 from agentlens.trace import TraceEngine
@@ -42,19 +49,16 @@ class AgentLensSession:
 
         risk = self.risk_classifier.assess(proposal)
         policy = self.policy_engine.evaluate(proposal, risk)
+        context = self._decision_context(proposal, event, risk, policy)
         if policy.action == PolicyAction.AUTO_EXECUTE:
             card = self.intelligence.fallback_card(
                 proposal,
                 risk,
                 trajectory_preview="No trajectory generated because policy auto-executed this low-risk action.",
             )
+            card.dependency_evidence = context.dependency_evidence
         else:
-            card = self.intelligence.build_card(
-                instruction=self.session.original_instruction,
-                proposal=proposal,
-                risk=risk,
-                session_summary=self._session_summary(),
-            )
+            card = self.intelligence.build_card(context)
 
         status = GateStatus.PENDING
         if policy.action == PolicyAction.AUTO_EXECUTE:
@@ -77,6 +81,77 @@ class AgentLensSession:
         traces, gates = self.storage.timeline(self.session.id)
         return Timeline(session=self.session, traces=traces, gates=gates)
 
+    def explain(self, gate_id: str) -> ExplainMoreResponse:
+        gate = self.storage.gates.get(gate_id)
+        if gate is None or gate.session_id != self.session.id:
+            raise KeyError(gate_id)
+        card = gate.intelligence_card
+        dependency_evidence = card.dependency_evidence if card else []
+        confidence_evidence = card.confidence_evidence if card else []
+        suggested_modification = None
+        if gate.status == GateStatus.PENDING:
+            suggested_modification = self._suggested_modification(gate)
+        return ExplainMoreResponse(
+            gate_id=gate.id,
+            summary=card.summary if card else None,
+            risk=gate.risk_assessment,
+            policy=gate.policy_decision,
+            trajectory=card.full_trajectory if card else None,
+            drift_flag=card.drift_flag if card else None,
+            confidence=card.confidence if card else None,
+            confidence_evidence=confidence_evidence,
+            dependency_evidence=dependency_evidence,
+            suggested_modification=suggested_modification,
+            context_summary=self._session_summary(),
+        )
+
+    def _decision_context(
+        self,
+        proposal: ToolCallProposal,
+        event: TraceEvent,
+        risk: RiskAssessment,
+        policy: PolicyDecision,
+    ) -> DecisionContext:
+        traces, gates = self.storage.timeline(self.session.id)
+        dependency_records = self.risk_classifier.dependency_evidence_for_paths(risk.affected_files)
+        dependency_evidence = [
+            DependencyEvidence(path=path, **record)
+            for path, record in dependency_records.items()
+        ]
+        recent_actions = [
+            f"{trace.tool_name} {trace.params}" for trace in (traces + [event])[-8:]
+        ]
+        recent_gate_payloads = [
+            {
+                "status": gate.status,
+                "risk_level": gate.risk_assessment.risk_level,
+                "policy_action": gate.policy_decision.action,
+                "summary": gate.intelligence_card.summary if gate.intelligence_card else None,
+            }
+            for gate in gates[-6:]
+        ]
+        goal = SessionGoalSummary(
+            inferred_goal=self.session.original_instruction,
+            recent_actions=recent_actions,
+            open_questions=self._open_questions(risk, policy),
+        )
+        return DecisionContext(
+            session_id=self.session.id,
+            original_instruction=self.session.original_instruction,
+            proposal=proposal,
+            risk=risk,
+            policy=policy,
+            recent_traces=(traces + [event])[-8:],
+            recent_gates=recent_gate_payloads,
+            git_snapshot=event.git_snapshot,
+            dependency_evidence=dependency_evidence,
+            session_goal=goal,
+            visible_metadata={
+                "trace_id": event.id,
+                "session_created_at": self.session.created_at.isoformat(),
+            },
+        )
+
     def _session_summary(self) -> str:
         traces, gates = self.storage.timeline(self.session.id)
         trace_lines = [
@@ -88,3 +163,21 @@ class AgentLensSession:
             for gate in gates[-8:]
         ]
         return "\n".join(trace_lines + gate_lines) or "No prior session activity."
+
+    def _open_questions(self, risk: RiskAssessment, policy: PolicyDecision) -> list[str]:
+        questions: list[str] = []
+        if policy.action != PolicyAction.AUTO_EXECUTE:
+            questions.append("Should this action be approved before execution?")
+        if risk.affected_files:
+            questions.append("Have referenced callers and configuration links been checked?")
+        if risk.risk_level in {"high", "critical"}:
+            questions.append("Is there a safer scoped alternative?")
+        return questions
+
+    def _suggested_modification(self, gate: Gate) -> str:
+        files = ", ".join(gate.risk_assessment.affected_files[:3])
+        if gate.risk_assessment.risk_level == "critical":
+            return "Do not execute the destructive action; inspect references and propose a reversible migration plan first."
+        if files:
+            return f"Inspect references for {files}, then propose the smallest reversible change."
+        return "Ask the agent to restate the intended effect and provide a lower-risk command or patch."

@@ -186,3 +186,37 @@ project-local Codex hooks. `.codex/hooks.json` mirrors `PreToolUse` and
 frontend polls `/sessions/latest` so hook-created sessions appear without a dashboard
 link. This still needs live interactive validation and payload-shape hardening before it
 should be presented as the primary production path.
+
+Third follow-up status: Codex hook mode is now stronger for real usage. `UserPromptSubmit`
+starts a fresh AgentLens session per task, duplicate `PreToolUse` / `PermissionRequest`
+payloads are suppressed, stale local session files recover automatically, and the web
+task composer has been removed so the normal Codex terminal remains the primary workflow.
+
+## Phase 10: Intelligence Depth and Cost-Aware Routing
+
+Make the intelligence layer match the PRD more closely while using OpenAI calls
+efficiently. Reserve the strong model for consequential gated decisions, use the nano
+model for lightweight summaries and low-risk work, and expose the reasoning evidence in
+the approval surfaces.
+
+Automatic validation:
+- Model routing tests prove low-risk auto-executed work uses the nano role and gated writes use the strong role.
+- Risk tests cover JavaScript/TypeScript import references, config/doc references, and destructive shell evidence.
+- Session/API tests cover richer explain responses.
+- Hook tests cover prompt-created sessions and duplicate hook suppression.
+- Real OpenAI integration tests cover structured trajectory and full card generation.
+- Frontend production build validates the expanded card schema.
+
+Human validation:
+- Start `uv run agentlens-guard --repo /Users/aaryan/Desktop/Agent_Lens`.
+- Start the frontend on `localhost:3000`.
+- Run a normal Codex TUI task and confirm AgentLens starts a fresh session from the prompt.
+- Confirm the inspector shows trajectory, dependency evidence, confidence calibration, drift, and model routing.
+- Trigger a duplicated permission/tool event and confirm the dashboard does not show duplicate rows for the same action.
+
+Status: implementation complete for the first cost-aware intelligence pass. Decision
+cards now carry full trajectory, confidence factors, dependency/reference evidence,
+drift score, and model-role metadata. `Explain More` returns the same structured
+evidence through the API and Slack. Validation passed on June 22, 2026: focused backend
+suite `26 passed`, real OpenAI integration tests passed, `uv run ruff check .` passed,
+and `npm run build` passed.

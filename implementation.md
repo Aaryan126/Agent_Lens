@@ -67,17 +67,27 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 - The local API now exposes `GET /sessions/latest`, and the local frontend polls it so hook-created sessions can appear without a session-specific URL.
 - `agentlens-hook` now recovers when `.agentlens/codex_hook_session.json` points at a session from a previous in-memory guard process. A `404 session not found` response triggers fresh session creation and a retry.
 - The dashboard no longer shows the web-launched Codex task composer. The primary local workflow is now the normal Codex terminal plus project hooks, with the UI acting as a passive review and ledger console.
+- Cost-aware OpenAI model routing is implemented through `agentlens.model_routing`. Low-risk auto-executed work and lightweight summaries use `OPENAI_NANO_MODEL`; consequential gated actions use `OPENAI_MODEL`; drift continues to use `OPENAI_EMBEDDING_MODEL`.
+- Decision cards now carry full trajectory details, confidence calibration factors, dependency/reference evidence, drift score, and model-role metadata. The frontend inspector renders those details so the dashboard shows why AgentLens made a recommendation instead of only showing a risk badge.
+- The intelligence layer now receives a typed `DecisionContext` containing the original instruction, recent trace/gate context, git snapshot, risk, policy, inferred goal, and dependency evidence before generating trajectory, drift, confidence, and translation.
+- Semantic risk analysis now scans Python plus JavaScript/TypeScript import references, config/docs references, affected shell paths, and shell mutation evidence.
+- `POST /gates/{gate_id}/explain` now returns structured `ExplainMoreResponse` data with trajectory, confidence evidence, dependency evidence, and safer modification guidance. Slack `Explain more` renders the richer explanation too.
+- Codex hook mode now handles `UserPromptSubmit` to create a fresh AgentLens session per new Codex task and suppresses duplicate hook notifications for the same tool payload across `PreToolUse` and `PermissionRequest`.
+- Validation passed on June 22, 2026: focused backend suite `uv run pytest tests/test_policy_risk.py tests/test_session_api.py tests/test_codex_hook.py tests/test_model_routing.py tests/test_openai_integration.py` reported 26 passed, `uv run ruff check .` passed, and frontend `npm run build` passed.
 
 ## Known Gaps
 
 - Slack backend integration is implemented and live-validated through ngrok.
 - PostgreSQL runtime storage is implemented and live-validated against Render Postgres.
 - Redis remains a documented future target for in-flight state/cache, but it is not required for the hosted demo path yet.
+- Codex hook payload shapes have been hardened against the observed local flow, but broader MCP/edit-tool payload variants should still be collected from more live sessions.
+- Deep attachment to an arbitrary already-running Codex TUI should still target Codex's app-server/remote-control protocol when that surface stabilizes.
 
 ## Next Steps
 
 1. Warm `https://agentlens-api-ggkh.onrender.com/health` before judging because Render free web services sleep after idle.
 2. Renew or upgrade Render Postgres before July 21, 2026 if the demo must remain live.
-3. Validate the Codex TUI hook mode in a live interactive session and inspect the exact hook payload shapes Codex emits for Bash, apply_patch, and MCP tools.
-4. Investigate Codex's app-server protocol for a deeper future integration that can stream turn/item events with richer state than hooks.
-5. Review the frontend npm audit finding before forcing dependency changes; the available audit fix is breaking.
+3. Run one fresh live Codex TUI session after the `UserPromptSubmit` hook change and confirm the dashboard starts a new session from the prompt.
+4. Capture additional hook payload shapes for apply_patch, Edit/Write, and MCP tools to improve normalization.
+5. Investigate Codex's app-server protocol for a deeper future integration that can stream turn/item events with richer state than hooks.
+6. Review the frontend npm audit finding before forcing dependency changes; the available audit fix is breaking.

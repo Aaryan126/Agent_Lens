@@ -15,6 +15,7 @@ from agentlens.config import load_settings
 from agentlens.schemas import (
     Gate,
     GateStatus,
+    ExplainMoreResponse,
     LedgerAnalytics,
     Session,
     SessionStart,
@@ -198,16 +199,15 @@ def modify_gate(gate_id: str, payload: DecisionPayload) -> Gate:
 
 
 @app.post("/gates/{gate_id}/explain")
-def explain_gate(gate_id: str) -> dict[str, object]:
+def explain_gate(gate_id: str) -> ExplainMoreResponse:
     gate = store.gates.get(gate_id)
     if gate is None:
         raise HTTPException(status_code=404, detail="gate not found")
-    return {
-        "gate_id": gate.id,
-        "summary": gate.intelligence_card.summary if gate.intelligence_card else None,
-        "risk": gate.risk_assessment,
-        "policy": gate.policy_decision,
-    }
+    session = AgentLensSession(store.get_session(gate.session_id))
+    try:
+        return session.explain(gate_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="gate not found") from None
 
 
 @app.post("/integrations/slack/actions")

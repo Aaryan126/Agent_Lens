@@ -16,6 +16,7 @@ class Settings(BaseSettings):
 
     openai_api_key: str = ""
     openai_model: str = "gpt-4.1"
+    openai_nano_model: str = "gpt-4.1-nano"
     openai_embedding_model: str = "text-embedding-3-small"
     database_url: str = "postgresql+asyncpg://agentlens:agentlens@localhost:5432/agentlens"
     redis_url: str = "redis://localhost:6379/0"
