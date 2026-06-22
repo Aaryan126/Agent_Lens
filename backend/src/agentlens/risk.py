@@ -124,6 +124,14 @@ class SemanticRiskClassifier:
         evidence: list[str] = []
         joined = " ".join(str(value).lower() for value in proposal.params.values())
 
+        if proposal.tool_name in {"fs.read", "git.status", "run_tests"}:
+            evidence.append("read-only inspection action")
+            return BlastRadius.LOW, evidence
+
+        if proposal.tool_name == "shell.run" and self._is_read_only_shell_command(proposal.params):
+            evidence.append("shell command appears read-only")
+            return BlastRadius.LOW, evidence
+
         if any(fragment in joined for fragment in ["/prod", "/migrations", "drop table", "deploy"]):
             evidence.append("action touches production, migrations, deployment, or destructive DB terms")
             return BlastRadius.HIGH, evidence
@@ -148,9 +156,6 @@ class SemanticRiskClassifier:
             return BlastRadius.MEDIUM, evidence
 
         if proposal.tool_name == "shell.run":
-            if self._is_read_only_shell_command(proposal.params):
-                evidence.append("shell command appears read-only")
-                return BlastRadius.LOW, evidence
             shell_evidence = self._shell_evidence(proposal.params)
             evidence.extend(shell_evidence)
             if shell_evidence:

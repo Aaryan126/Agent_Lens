@@ -195,6 +195,12 @@ Live validation then exposed hook process startup latency: repeated `PreToolUse`
 timed out at Codex's 10-second hook limit when routed through `uv run`. The project hook
 commands now prefer `backend/.venv/bin/agentlens-hook`, keep a `uv run` fallback, and use
 a 30-second timeout.
+Fourth follow-up status: hook mode is no longer mirror-only for pending risky actions.
+Read-only shell/file inspections short-circuit to low risk and auto-execute before
+dependency blast-radius checks. Pending hooked actions wait briefly for AgentLens
+approval; approved/modified gates pass, blocked or timed-out gates fail the hook with a
+non-zero exit. The UI now labels these controls as gate decisions instead of generic
+Codex controls.
 
 ## Phase 10: Intelligence Depth and Cost-Aware Routing
 
@@ -224,4 +230,6 @@ drift score, and model-role metadata. `Explain More` returns the same structured
 evidence through the API and Slack. Validation passed on June 22, 2026: focused backend
 suite `26 passed`, real OpenAI integration tests passed, `uv run ruff check .` passed,
 and `npm run build` passed. After the hook timeout fix, `.codex/hooks.json` parsed
-successfully and `uv run pytest tests/test_codex_hook.py` passed.
+successfully and `uv run pytest tests/test_codex_hook.py` passed. After hook enforcement
+and read-only risk fixes, `uv run pytest` reported 57 passed, `uv run ruff check .`
+passed, and frontend `npm run build` passed.

@@ -177,6 +177,14 @@ def pending_gates() -> list[Gate]:
     return store.pending_gates()
 
 
+@app.get("/gates/{gate_id}")
+def get_gate(gate_id: str) -> Gate:
+    gate = store.gates.get(gate_id)
+    if gate is None:
+        raise HTTPException(status_code=404, detail="gate not found")
+    return gate
+
+
 @app.get("/audit/events")
 def audit_events(limit: int = 100) -> dict[str, object]:
     events = store.audit_log.read_all()

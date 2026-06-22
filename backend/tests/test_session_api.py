@@ -144,6 +144,28 @@ def test_gate_decision_endpoint_resolves_pending_gate(tmp_path: Path, monkeypatc
     assert resolved["human_reason"] == "Scoped write is acceptable."
 
 
+def test_get_gate_endpoint_returns_single_gate(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "replace_me")
+    client = TestClient(app)
+    session_id = client.post(
+        "/sessions",
+        json={"original_instruction": "Review writes.", "repo_path": str(tmp_path)},
+    ).json()["id"]
+    gate = client.post(
+        f"/sessions/{session_id}/tool-calls",
+        json={
+            "session_id": session_id,
+            "tool_name": "fs.write",
+            "params": {"path": "notes.md"},
+        },
+    ).json()
+
+    response = client.get(f"/gates/{gate['id']}")
+
+    assert response.status_code == 200
+    assert response.json()["id"] == gate["id"]
+
+
 def test_explain_gate_endpoint_returns_intelligence_evidence(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "replace_me")
     client = TestClient(app)

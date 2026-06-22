@@ -1,4 +1,5 @@
 import httpx
+import pytest
 
 from agentlens.codex_hook import _proposal_from_hook, main as codex_hook_main
 
@@ -223,3 +224,108 @@ def test_codex_hook_deduplicates_same_tool_payload(monkeypatch, tmp_path) -> Non
 
     posted_tool_calls = [request for request in requests if request[1].endswith("/tool-calls")]
     assert len(posted_tool_calls) == 1
+
+
+def test_codex_hook_waits_for_pending_gate_approval(monkeypatch, tmp_path) -> None:
+    requests: list[tuple[str, str, dict[str, object] | None]] = []
+    polls = {"count": 0}
+
+    class FakeClient:
+        def __init__(self, timeout: int) -> None:
+            self.timeout = timeout
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def post(self, url: str, json: dict[str, object]):
+            requests.append(("POST", url, json))
+            request = httpx.Request("POST", url)
+            if url.endswith("/sessions"):
+                return httpx.Response(200, json={"id": "ses_hook"}, request=request)
+            return httpx.Response(
+                200,
+                json={"id": "gate_pending", "status": "pending", "intelligence_card": {"summary": "Needs review."}},
+                request=request,
+            )
+
+        def get(self, url: str):
+            requests.append(("GET", url, None))
+            polls["count"] += 1
+            request = httpx.Request("GET", url)
+            status = "approved" if polls["count"] >= 1 else "pending"
+            return httpx.Response(200, json={"id": "gate_pending", "status": status}, request=request)
+
+    monkeypatch.setattr(httpx, "Client", FakeClient)
+    monkeypatch.setattr("time.sleep", lambda _: None)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "agentlens-hook",
+            "PreToolUse",
+            "--api-url",
+            "http://127.0.0.1:8787",
+            "--session-file",
+            str(tmp_path / "session.json"),
+            "--repo",
+            str(tmp_path),
+            "--approval-timeout",
+            "2",
+        ],
+    )
+    monkeypatch.setattr(
+        "sys.stdin",
+        type("FakeStdin", (), {"read": lambda self: '{"tool_name":"Bash","input":{"command":"touch notes.md"}}'})(),
+    )
+
+    codex_hook_main()
+
+    assert any(request[0] == "GET" and request[1].endswith("/gates/gate_pending") for request in requests)
+
+
+def test_codex_hook_blocks_when_gate_is_blocked(monkeypatch, tmp_path) -> None:
+    class FakeClient:
+        def __init__(self, timeout: int) -> None:
+            self.timeout = timeout
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def post(self, url: str, json: dict[str, object]):
+            request = httpx.Request("POST", url)
+            if url.endswith("/sessions"):
+                return httpx.Response(200, json={"id": "ses_hook"}, request=request)
+            return httpx.Response(
+                200,
+                json={"id": "gate_blocked", "status": "blocked", "intelligence_card": {"summary": "Do not delete."}},
+                request=request,
+            )
+
+    monkeypatch.setattr(httpx, "Client", FakeClient)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "agentlens-hook",
+            "PreToolUse",
+            "--api-url",
+            "http://127.0.0.1:8787",
+            "--session-file",
+            str(tmp_path / "session.json"),
+            "--repo",
+            str(tmp_path),
+        ],
+    )
+    monkeypatch.setattr(
+        "sys.stdin",
+        type("FakeStdin", (), {"read": lambda self: '{"tool_name":"Bash","input":{"command":"rm -rf backend/migrations"}}'})(),
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        codex_hook_main()
+
+    assert exc.value.code == 2

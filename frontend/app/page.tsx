@@ -925,11 +925,11 @@ function Inspector({
         <PanelTitle eyebrow="Inspector" title="No Action Selected" />
         <p className="mt-4 text-sm leading-6 text-neutral-600">
           Use Codex normally in the terminal. When a hook mirrors a tool proposal, select it here
-          to inspect risk, trajectory, drift, policy, and approval controls.
+          to inspect risk, trajectory, drift, policy, and gate decisions.
         </p>
         <div className="mt-6 grid gap-2">
-          <Fact label="Review Mode" value="Pending Gate" />
-          <Fact label="Primary Surface" value="Slack + Console" />
+          <Fact label="Review Mode" value="Hook-Gated" />
+          <Fact label="Primary Surface" value="Console + Slack" />
           <Fact label="Ledger" value="Postgres Backed" />
         </div>
       </aside>
@@ -1051,7 +1051,7 @@ function Inspector({
       ) : null}
 
       <label className="mt-5 block text-xs font-semibold uppercase tracking-wide text-neutral-500" htmlFor="decision-note">
-        Decision Note
+        Gate Decision Note
       </label>
       <input
         id="decision-note"
@@ -1065,23 +1065,33 @@ function Inspector({
           disabled={disabled}
           className="h-10 rounded-md bg-neutral-950 text-sm font-semibold text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500"
         >
-          Approve
+          Approve Gate
         </button>
         <button
           onClick={() => onDecision(gate, "block")}
           disabled={disabled}
           className="h-10 rounded-md border border-red-700 text-sm font-semibold text-red-800 hover:bg-red-50 disabled:cursor-not-allowed disabled:border-neutral-200 disabled:text-neutral-400"
         >
-          Block
+          Block Gate
         </button>
         <button
           onClick={() => onDecision(gate, "modify")}
           disabled={disabled}
           className="h-10 rounded-md border border-neutral-300 text-sm font-semibold text-neutral-800 hover:border-neutral-950 disabled:cursor-not-allowed disabled:border-neutral-200 disabled:text-neutral-400"
         >
-          Modify
+          Modify Gate
         </button>
       </div>
+      {gate.status === "pending" ? (
+        <p className="mt-3 text-xs leading-5 text-neutral-500">
+          In local hook mode, Codex waits briefly for this AgentLens gate. Approval lets the
+          current action continue; block or timeout denies it.
+        </p>
+      ) : (
+        <p className="mt-3 text-xs leading-5 text-neutral-500">
+          This gate is resolved in the AgentLens ledger.
+        </p>
+      )}
     </aside>
   );
 }

@@ -150,6 +150,13 @@ local hook state is stored under `.agentlens/` and ignored by git.
 If you restart `agentlens-guard`, the hook automatically creates a fresh AgentLens
 session if the remembered local session no longer exists.
 
+Read-only inspection commands are auto-executed and collapsed in the dashboard. Risky
+hooked actions are enforcement-gated: the hook posts the proposal, waits up to
+`AGENTLENS_APPROVAL_TIMEOUT_SECONDS` seconds for an AgentLens decision, then exits
+successfully only for approved/modified/auto-executed gates. Blocked or timed-out gates
+return a non-zero hook exit so Codex does not run the action. Set
+`AGENTLENS_ENFORCE_APPROVALS=0` only when you want mirror-only ledger behavior.
+
 For hosted judging or remote viewing, start supervision in the web console, then run the
 command shown in the empty review queue from your local checkout. It uses the Codex CLI
 adapter to execute Codex locally, parse real Codex JSON events, and post proposed tool
@@ -319,6 +326,8 @@ hosted state with `AGENTLENS_STORAGE_BACKEND=postgres`.
 - `AGENTLENS_STORAGE_BACKEND`: `memory` for local fallback or `postgres` for hosted durable state.
 - `AGENTLENS_CORS_ORIGINS`: comma-separated frontend origins allowed to call the backend.
 - `AGENTLENS_PROJECT_ROOT`: repo path used by hosted demo sessions and risk/dependency scanning.
+- `AGENTLENS_ENFORCE_APPROVALS`: `1` to make Codex hooks fail blocked/timed-out gates, `0` for mirror-only mode.
+- `AGENTLENS_APPROVAL_TIMEOUT_SECONDS`: seconds a hook waits for a pending dashboard decision.
 
 ## Status
 

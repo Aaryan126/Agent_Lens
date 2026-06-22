@@ -5,13 +5,14 @@ import hashlib
 import json
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
 import httpx
 
 from agentlens.adapters.codex_cli import _normalize_tool_name
-from agentlens.schemas import ToolCallProposal
+from agentlens.schemas import GateStatus, ToolCallProposal
 
 
 def main() -> None:
@@ -33,6 +34,19 @@ def main() -> None:
         "--repo",
         default=os.environ.get("AGENTLENS_REPO", "."),
         help="Repository path associated with the Codex session.",
+    )
+    parser.add_argument(
+        "--approval-timeout",
+        type=float,
+        default=float(os.environ.get("AGENTLENS_APPROVAL_TIMEOUT_SECONDS", "25")),
+        help="Seconds to wait for pending AgentLens approval decisions.",
+    )
+    parser.add_argument(
+        "--no-enforce",
+        action="store_true",
+        default=os.environ.get("AGENTLENS_ENFORCE_APPROVALS", "1").lower()
+        in {"0", "false", "no"},
+        help="Mirror events without failing the hook for blocked or timed-out gates.",
     )
     args = parser.parse_args()
 
@@ -66,12 +80,25 @@ def main() -> None:
     if proposal is None:
         return
     signature = _proposal_signature(proposal)
-    if _is_duplicate(session_file, signature):
+    existing_gate = _gate_for_signature(session_file, signature)
+    if existing_gate:
+        _enforce_gate(
+            api_url=api_url,
+            gate=existing_gate,
+            approval_timeout=args.approval_timeout,
+            enforce=not args.no_enforce,
+        )
         return
 
     try:
-        _post_proposal(api_url=api_url, session_id=session_id, proposal=proposal)
-        _remember_signature(session_file, signature)
+        gate = _post_proposal(api_url=api_url, session_id=session_id, proposal=proposal)
+        _remember_gate(session_file, signature, gate)
+        _enforce_gate(
+            api_url=api_url,
+            gate=gate,
+            approval_timeout=args.approval_timeout,
+            enforce=not args.no_enforce,
+        )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code != 404 or os.environ.get("AGENTLENS_SESSION_ID"):
             print(f"AgentLens hook mirror failed: {exc}", file=sys.stderr)
@@ -85,8 +112,14 @@ def main() -> None:
                 event_name=args.event,
             )
             proposal.session_id = session_id
-            _post_proposal(api_url=api_url, session_id=session_id, proposal=proposal)
-            _remember_signature(session_file, _proposal_signature(proposal))
+            gate = _post_proposal(api_url=api_url, session_id=session_id, proposal=proposal)
+            _remember_gate(session_file, _proposal_signature(proposal), gate)
+            _enforce_gate(
+                api_url=api_url,
+                gate=gate,
+                approval_timeout=args.approval_timeout,
+                enforce=not args.no_enforce,
+            )
         except Exception as retry_exc:
             print(f"AgentLens hook mirror retry failed: {retry_exc}", file=sys.stderr)
     except Exception as exc:
@@ -159,12 +192,25 @@ def _create_session(
     return session_id
 
 
-def _post_proposal(*, api_url: str, session_id: str, proposal: ToolCallProposal) -> None:
+def _post_proposal(*, api_url: str, session_id: str, proposal: ToolCallProposal) -> dict[str, Any]:
     with httpx.Client(timeout=10) as client:
-        client.post(
+        response = client.post(
             f"{api_url}/sessions/{session_id}/tool-calls",
             json=proposal.model_dump(mode="json"),
-        ).raise_for_status()
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data if isinstance(data, dict) else {}
+
+
+def _fetch_gate(*, api_url: str, gate_id: str) -> dict[str, Any] | None:
+    with httpx.Client(timeout=5) as client:
+        response = client.get(f"{api_url}/gates/{gate_id}")
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        data = response.json()
+        return data if isinstance(data, dict) else None
 
 
 def _proposal_signature(proposal: ToolCallProposal) -> str:
@@ -176,18 +222,79 @@ def _proposal_signature(proposal: ToolCallProposal) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
-def _is_duplicate(session_file: Path, signature: str) -> bool:
-    recent = _load_session_state(session_file).get("recent_proposals", [])
-    return signature in recent
+def _gate_for_signature(session_file: Path, signature: str) -> dict[str, Any] | None:
+    state = _load_session_state(session_file)
+    gates = state.get("proposal_gates")
+    if isinstance(gates, dict):
+        gate = gates.get(signature)
+        if isinstance(gate, dict):
+            return gate
+    recent = state.get("recent_proposals", [])
+    if signature in recent:
+        return {"status": GateStatus.AUTO_EXECUTED, "id": None}
+    return None
 
 
-def _remember_signature(session_file: Path, signature: str) -> None:
+def _remember_gate(session_file: Path, signature: str, gate: dict[str, Any]) -> None:
     state = _load_session_state(session_file)
     recent = [item for item in state.get("recent_proposals", []) if isinstance(item, str)]
     if signature not in recent:
         recent.append(signature)
     state["recent_proposals"] = recent[-30:]
+    proposal_gates = state.get("proposal_gates")
+    if not isinstance(proposal_gates, dict):
+        proposal_gates = {}
+    proposal_gates[signature] = {
+        "id": gate.get("id"),
+        "status": gate.get("status"),
+        "summary": ((gate.get("intelligence_card") or {}).get("summary")),
+    }
+    state["proposal_gates"] = dict(list(proposal_gates.items())[-30:])
     _write_session_state(session_file, state)
+
+
+def _enforce_gate(
+    *,
+    api_url: str,
+    gate: dict[str, Any],
+    approval_timeout: float,
+    enforce: bool,
+) -> None:
+    if not enforce:
+        return
+    gate_id = gate.get("id")
+    status = gate.get("status")
+    if status == GateStatus.AUTO_EXECUTED or status in {"auto_executed", "approved", "modified"}:
+        return
+    if status == GateStatus.BLOCKED or status == "blocked":
+        _deny(gate, "AgentLens blocked this action.")
+    if status != GateStatus.PENDING and status != "pending":
+        return
+    if not gate_id:
+        _deny(gate, "AgentLens requires approval but no gate id was returned.")
+
+    deadline = time.monotonic() + max(0.0, approval_timeout)
+    latest = gate
+    while time.monotonic() < deadline:
+        time.sleep(0.75)
+        fetched = _fetch_gate(api_url=api_url, gate_id=str(gate_id))
+        if fetched is None:
+            continue
+        latest = fetched
+        latest_status = fetched.get("status")
+        if latest_status in {"approved", "modified", "auto_executed"}:
+            return
+        if latest_status == "blocked":
+            _deny(fetched, "AgentLens blocked this action.")
+
+    _deny(latest, "AgentLens approval timed out before this action was approved.")
+
+
+def _deny(gate: dict[str, Any], message: str) -> None:
+    card = gate.get("intelligence_card") if isinstance(gate.get("intelligence_card"), dict) else {}
+    summary = card.get("summary") or message
+    print(f"{message} {summary}", file=sys.stderr)
+    raise SystemExit(2)
 
 
 def _proposal_from_hook(
