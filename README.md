@@ -141,11 +141,12 @@ codex
 ```
 
 If Codex says hooks need review, type `/hooks`, inspect the AgentLens hook commands, and
-trust them for this project. After that, use Codex normally. `PreToolUse` and
-`UserPromptSubmit` starts a fresh AgentLens session for each new task, while `PreToolUse`
-and `PermissionRequest` hook events are mirrored into AgentLens through `uv run
-agentlens-hook`. Duplicate hook notifications for the same tool payload are suppressed,
-and local hook state is stored under `.agentlens/` and ignored by git.
+trust them for this project. After that, use Codex normally. `UserPromptSubmit` starts a
+fresh AgentLens session for each new task, while `PreToolUse` and `PermissionRequest`
+hook events are mirrored into AgentLens through the local
+`backend/.venv/bin/agentlens-hook` console script, with a `uv run` fallback for fresh
+checkouts. Duplicate hook notifications for the same tool payload are suppressed, and
+local hook state is stored under `.agentlens/` and ignored by git.
 If you restart `agentlens-guard`, the hook automatically creates a fresh AgentLens
 session if the remembered local session no longer exists.
 

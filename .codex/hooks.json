@@ -6,8 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"$(git rev-parse --show-toplevel)/backend\" && uv run agentlens-hook UserPromptSubmit --repo \"$(git rev-parse --show-toplevel)\" --session-file \"$(git rev-parse --show-toplevel)/.agentlens/codex_hook_session.json\"",
-            "timeout": 10,
+            "command": "ROOT=\"$(git rev-parse --show-toplevel)\"; cd \"$ROOT/backend\"; if [ -x .venv/bin/agentlens-hook ]; then .venv/bin/agentlens-hook UserPromptSubmit --repo \"$ROOT\" --session-file \"$ROOT/.agentlens/codex_hook_session.json\"; else uv run agentlens-hook UserPromptSubmit --repo \"$ROOT\" --session-file \"$ROOT/.agentlens/codex_hook_session.json\"; fi",
+            "timeout": 30,
             "statusMessage": "Starting AgentLens supervision session"
           }
         ]
@@ -19,8 +19,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"$(git rev-parse --show-toplevel)/backend\" && uv run agentlens-hook PreToolUse --repo \"$(git rev-parse --show-toplevel)\" --session-file \"$(git rev-parse --show-toplevel)/.agentlens/codex_hook_session.json\"",
-            "timeout": 10,
+            "command": "ROOT=\"$(git rev-parse --show-toplevel)\"; cd \"$ROOT/backend\"; if [ -x .venv/bin/agentlens-hook ]; then .venv/bin/agentlens-hook PreToolUse --repo \"$ROOT\" --session-file \"$ROOT/.agentlens/codex_hook_session.json\"; else uv run agentlens-hook PreToolUse --repo \"$ROOT\" --session-file \"$ROOT/.agentlens/codex_hook_session.json\"; fi",
+            "timeout": 30,
             "statusMessage": "Mirroring tool proposal to AgentLens"
           }
         ]
@@ -32,8 +32,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"$(git rev-parse --show-toplevel)/backend\" && uv run agentlens-hook PermissionRequest --repo \"$(git rev-parse --show-toplevel)\" --session-file \"$(git rev-parse --show-toplevel)/.agentlens/codex_hook_session.json\"",
-            "timeout": 10,
+            "command": "ROOT=\"$(git rev-parse --show-toplevel)\"; cd \"$ROOT/backend\"; if [ -x .venv/bin/agentlens-hook ]; then .venv/bin/agentlens-hook PermissionRequest --repo \"$ROOT\" --session-file \"$ROOT/.agentlens/codex_hook_session.json\"; else uv run agentlens-hook PermissionRequest --repo \"$ROOT\" --session-file \"$ROOT/.agentlens/codex_hook_session.json\"; fi",
+            "timeout": 30,
             "statusMessage": "Checking AgentLens approval context"
           }
         ]

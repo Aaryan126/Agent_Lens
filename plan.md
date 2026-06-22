@@ -191,6 +191,10 @@ Third follow-up status: Codex hook mode is now stronger for real usage. `UserPro
 starts a fresh AgentLens session per task, duplicate `PreToolUse` / `PermissionRequest`
 payloads are suppressed, stale local session files recover automatically, and the web
 task composer has been removed so the normal Codex terminal remains the primary workflow.
+Live validation then exposed hook process startup latency: repeated `PreToolUse` calls
+timed out at Codex's 10-second hook limit when routed through `uv run`. The project hook
+commands now prefer `backend/.venv/bin/agentlens-hook`, keep a `uv run` fallback, and use
+a 30-second timeout.
 
 ## Phase 10: Intelligence Depth and Cost-Aware Routing
 
@@ -219,4 +223,5 @@ cards now carry full trajectory, confidence factors, dependency/reference eviden
 drift score, and model-role metadata. `Explain More` returns the same structured
 evidence through the API and Slack. Validation passed on June 22, 2026: focused backend
 suite `26 passed`, real OpenAI integration tests passed, `uv run ruff check .` passed,
-and `npm run build` passed.
+and `npm run build` passed. After the hook timeout fix, `.codex/hooks.json` parsed
+successfully and `uv run pytest tests/test_codex_hook.py` passed.

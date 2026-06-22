@@ -74,6 +74,7 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 - `POST /gates/{gate_id}/explain` now returns structured `ExplainMoreResponse` data with trajectory, confidence evidence, dependency evidence, and safer modification guidance. Slack `Explain more` renders the richer explanation too.
 - Codex hook mode now handles `UserPromptSubmit` to create a fresh AgentLens session per new Codex task and suppresses duplicate hook notifications for the same tool payload across `PreToolUse` and `PermissionRequest`.
 - Validation passed on June 22, 2026: focused backend suite `uv run pytest tests/test_policy_risk.py tests/test_session_api.py tests/test_codex_hook.py tests/test_model_routing.py tests/test_openai_integration.py` reported 26 passed, `uv run ruff check .` passed, and frontend `npm run build` passed.
+- Live Codex TUI validation exposed `PreToolUse hook timed out after 10s` when many hooks fired through `uv run agentlens-hook`. `.codex/hooks.json` now prefers the already-installed `backend/.venv/bin/agentlens-hook` console script, keeps a `uv run` fallback, and raises hook timeouts to 30 seconds. Hook JSON validation passed and `uv run pytest tests/test_codex_hook.py` reported 5 passed.
 
 ## Known Gaps
 
@@ -87,7 +88,7 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 
 1. Warm `https://agentlens-api-ggkh.onrender.com/health` before judging because Render free web services sleep after idle.
 2. Renew or upgrade Render Postgres before July 21, 2026 if the demo must remain live.
-3. Run one fresh live Codex TUI session after the `UserPromptSubmit` hook change and confirm the dashboard starts a new session from the prompt.
+3. Re-trust the updated Codex hooks with `/hooks`, then run one fresh live Codex TUI session and confirm PreToolUse events no longer time out.
 4. Capture additional hook payload shapes for apply_patch, Edit/Write, and MCP tools to improve normalization.
 5. Investigate Codex's app-server protocol for a deeper future integration that can stream turn/item events with richer state than hooks.
 6. Review the frontend npm audit finding before forcing dependency changes; the available audit fix is breaking.
