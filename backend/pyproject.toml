@@ -37,6 +37,7 @@ dev = [
 agentlens-demo = "agentlens.cli:main"
 agentlens-codex = "agentlens.codex_terminal:main"
 agentlens-guard = "agentlens.guard:main"
+agentlens-hook = "agentlens.codex_hook:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

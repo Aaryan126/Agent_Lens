@@ -62,6 +62,9 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 - Latest hosted smoke passed: every sidebar section switched content, `Start Supervision` created a real hosted session, remote CLI posting populated the review queue, and no horizontal overflow was detected on desktop or mobile.
 - Terminal-first mirroring now prints a session-specific dashboard URL, and the frontend loads `?session=...` links directly. This fixes the gap where `agentlens-codex` successfully posted events to the local guard but the browser stayed on an old or empty session.
 - Codex CLI surface review found experimental `app-server`, `remote-control`, and `exec-server` commands, but no stable first-pass command for subscribing to an arbitrary already-open Codex TUI session. The reliable path remains launching Codex through AgentLens JSON event mode; deeper always-on attachment should target the official Codex server protocol.
+- Terminal session links now include both `session` and `api` query parameters, and the frontend can switch API targets at runtime. This fixes local dashboards that were started without `NEXT_PUBLIC_AGENTLENS_API_URL=http://127.0.0.1:8787`.
+- A first native Codex TUI integration is implemented through project-local hooks in `.codex/hooks.json` and the `agentlens-hook` console script. Normal interactive Codex sessions can mirror `PreToolUse` and `PermissionRequest` events into the local AgentLens guard after the user reviews/trusts the hooks with `/hooks`.
+- The local API now exposes `GET /sessions/latest`, and the local frontend polls it so hook-created sessions can appear without a session-specific URL.
 
 ## Known Gaps
 
@@ -73,5 +76,6 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 
 1. Warm `https://agentlens-api-ggkh.onrender.com/health` before judging because Render free web services sleep after idle.
 2. Renew or upgrade Render Postgres before July 21, 2026 if the demo must remain live.
-3. Investigate Codex's experimental app-server / remote-control protocol for a deeper terminal integration that can follow an interactive Codex session without replacing it.
-4. Review the frontend npm audit finding before forcing dependency changes; the available audit fix is breaking.
+3. Validate the Codex TUI hook mode in a live interactive session and inspect the exact hook payload shapes Codex emits for Bash, apply_patch, and MCP tools.
+4. Investigate Codex's app-server protocol for a deeper future integration that can stream turn/item events with richer state than hooks.
+5. Review the frontend npm audit finding before forcing dependency changes; the available audit fix is breaking.

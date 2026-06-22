@@ -56,6 +56,24 @@ def test_health_endpoint() -> None:
     assert response.json() == {"status": "ok"}
 
 
+def test_latest_session_endpoint_returns_newest_session(tmp_path: Path) -> None:
+    client = TestClient(app)
+    first = client.post(
+        "/sessions",
+        json={"original_instruction": "First session.", "repo_path": str(tmp_path)},
+    ).json()
+    second = client.post(
+        "/sessions",
+        json={"original_instruction": "Second session.", "repo_path": str(tmp_path)},
+    ).json()
+
+    response = client.get("/sessions/latest")
+
+    assert response.status_code == 200
+    assert response.json()["id"] in {first["id"], second["id"]}
+    assert response.json()["id"] == second["id"]
+
+
 def test_demo_session_endpoint_creates_reviewable_gates(monkeypatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "replace_me")
     client = TestClient(app)

@@ -85,8 +85,10 @@ uv run agentlens-codex --repo /path/to/your/repo "What is this repo about?"
 
 This runs Codex locally, prints readable terminal output, and mirrors parsed Codex
 tool-call proposals into the local AgentLens dashboard. The command prints a dashboard
-URL like `http://localhost:3000?session=ses_...`; open that URL to view the exact
-session created by the terminal run.
+URL like `http://localhost:3000?session=ses_...&api=http%3A%2F%2F127.0.0.1%3A8787`;
+open that URL to view the exact session created by the terminal run. The `api` query
+parameter lets the frontend connect to the same local guard that received the mirrored
+Codex events, even if the frontend was started without `NEXT_PUBLIC_AGENTLENS_API_URL`.
 
 8. Run the frontend approval console against the local guard:
 
@@ -105,6 +107,41 @@ then use `agentlens-codex` for each Codex task. This is the reliable integration
 today because it uses Codex JSON events. Attaching to an arbitrary already-running Codex
 TUI session should be built against Codex's experimental app-server or remote-control
 protocol, not by scraping terminal output.
+
+### Normal Codex TUI Hook Mode
+
+AgentLens also includes a project-local Codex hook config in `.codex/hooks.json`.
+This lets normal interactive Codex sessions mirror tool-use events into the local
+AgentLens guard without using `agentlens-codex`.
+
+1. Start the local guard:
+
+```bash
+cd backend
+uv run agentlens-guard --repo /Users/aaryan/Desktop/Agent_Lens
+```
+
+2. Start the frontend:
+
+```bash
+cd frontend
+npm run dev
+```
+
+The dashboard can now use the `api` query parameter from terminal links, stored local
+settings, or the default local API. It also polls `GET /sessions/latest` in local mode so
+hook-created sessions can appear without a special dashboard link.
+
+3. In a new terminal, run Codex normally from the repo root:
+
+```bash
+codex
+```
+
+If Codex says hooks need review, type `/hooks`, inspect the AgentLens hook commands, and
+trust them for this project. After that, use Codex normally. `PreToolUse` and
+`PermissionRequest` hook events are mirrored into AgentLens through `uv run
+agentlens-hook`, while local hook state is stored under `.agentlens/` and ignored by git.
 
 For hosted judging or remote viewing, start supervision in the web console, then run the
 command shown in the empty review queue from your local checkout. It uses the Codex CLI

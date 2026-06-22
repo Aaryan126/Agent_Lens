@@ -81,6 +81,13 @@ def create_session(payload: SessionStart):
     return session.session
 
 
+@app.get("/sessions/latest")
+def latest_session() -> Session:
+    if not store.sessions:
+        raise HTTPException(status_code=404, detail="no sessions found")
+    return max(store.sessions.values(), key=lambda session: session.created_at)
+
+
 @app.post("/demo/session")
 def create_demo_session() -> DemoSessionResponse:
     session = AgentLensSession.start(

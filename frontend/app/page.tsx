@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
-const API_URL = process.env.NEXT_PUBLIC_AGENTLENS_API_URL ?? "http://127.0.0.1:8000";
+const DEFAULT_API_URL = process.env.NEXT_PUBLIC_AGENTLENS_API_URL ?? "http://127.0.0.1:8000";
 const DEFAULT_SLACK_CHANNEL = "C0BBW328TEF";
 const ACTIVE_SESSION_STORAGE_KEY = "agentlens-active-session-id";
+const ACTIVE_API_STORAGE_KEY = "agentlens-api-url";
 
 type RiskLevel = "low" | "medium" | "high" | "critical";
 type GateStatus = "pending" | "approved" | "blocked" | "modified" | "auto_executed";
@@ -58,6 +59,7 @@ type DemoResponse = {
   session: {
     id: string;
     original_instruction: string;
+    created_at?: string;
   };
   gates: Gate[];
   timeline: {
@@ -139,6 +141,7 @@ export default function Home() {
   const [slackLoading, setSlackLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [health, setHealth] = useState<HealthState>("checking");
+  const [apiUrl, setApiUrl] = useState(DEFAULT_API_URL);
   const [slackChannel, setSlackChannel] = useState(DEFAULT_SLACK_CHANNEL);
   const [codexPrompt, setCodexPrompt] = useState(
     "Inspect this repo and propose the next implementation step.",
@@ -148,7 +151,7 @@ export default function Home() {
 
   useEffect(() => {
     let mounted = true;
-    fetch(`${API_URL}/health`)
+    fetch(`${apiUrl}/health`)
       .then((response) => {
         if (mounted) setHealth(response.ok ? "online" : "offline");
       })
@@ -158,17 +161,25 @@ export default function Home() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [apiUrl]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const urlApi = params.get("api")?.trim();
+    const nextApiUrl = urlApi || window.localStorage.getItem(ACTIVE_API_STORAGE_KEY) || DEFAULT_API_URL;
+    if (urlApi) {
+      window.localStorage.setItem(ACTIVE_API_STORAGE_KEY, urlApi);
+      setApiUrl(urlApi);
+    } else if (nextApiUrl !== apiUrl) {
+      setApiUrl(nextApiUrl);
+    }
     const urlSessionId = params.get("session")?.trim();
     if (urlSessionId) {
       window.localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, urlSessionId);
       setActiveView("review");
     }
     const sessionId = urlSessionId || window.localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY);
-    if (sessionId) void refreshSession(sessionId);
+    if (sessionId) void refreshSession(sessionId, nextApiUrl);
   }, []);
 
   const gates = demo?.timeline.gates ?? [];
@@ -182,8 +193,8 @@ export default function Home() {
   const criticalCount = gates.filter((gate) => gate.risk_assessment.risk_level === "critical").length;
   const resolvedCount = gates.filter((gate) => gate.status !== "pending").length;
   const trustScore = analytics ? Math.round(analytics.trust_score.score * 100) : null;
-  const apiHost = API_URL.replace(/^https?:\/\//, "");
-  const localGuardMode = isLocalApi(API_URL);
+  const apiHost = apiUrl.replace(/^https?:\/\//, "");
+  const localGuardMode = isLocalApi(apiUrl);
 
   useEffect(() => {
     if (!demo?.session.id) return;
@@ -191,13 +202,22 @@ export default function Home() {
       void refreshSession(demo.session.id);
     }, 2500);
     return () => window.clearInterval(interval);
-  }, [demo?.session.id]);
+  }, [apiUrl, demo?.session.id]);
+
+  useEffect(() => {
+    if (!localGuardMode) return;
+    const interval = window.setInterval(() => {
+      void attachLatestLocalSession();
+    }, 2500);
+    void attachLatestLocalSession();
+    return () => window.clearInterval(interval);
+  }, [apiUrl, demo?.session.id, localGuardMode]);
 
   async function createDemo() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(localGuardMode ? `${API_URL}/codex/sessions` : `${API_URL}/sessions`, {
+      const response = await fetch(localGuardMode ? `${apiUrl}/codex/sessions` : `${apiUrl}/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
@@ -216,12 +236,13 @@ export default function Home() {
       if (!response.ok) throw new Error(`Session failed with ${response.status}`);
       const body = await response.json();
       const session = (localGuardMode ? body.session : body) as DemoResponse["session"];
+      window.localStorage.setItem(ACTIVE_API_STORAGE_KEY, apiUrl);
       window.localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, session.id);
       const nextGates = localGuardMode ? ((body.timeline?.gates ?? []) as Gate[]) : [];
       const nextTraces = localGuardMode ? ((body.timeline?.traces ?? []) as TraceEvent[]) : [];
       setDemo({ session, gates: nextGates, timeline: { traces: nextTraces, gates: nextGates } });
       setSelectedGateId(nextGates.find((gate) => gate.status === "pending")?.id ?? nextGates[0]?.id ?? null);
-      setAnalytics(await fetchAnalytics(session.id));
+      setAnalytics(await fetchAnalytics(apiUrl, session.id));
       setActiveView("review");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to start supervision");
@@ -230,9 +251,9 @@ export default function Home() {
     }
   }
 
-  async function refreshSession(sessionId: string) {
+  async function refreshSession(sessionId: string, targetApiUrl = apiUrl) {
     try {
-      const response = await fetch(`${API_URL}/sessions/${sessionId}/timeline`);
+      const response = await fetch(`${targetApiUrl}/sessions/${sessionId}/timeline`);
       if (!response.ok) return;
       const timeline = (await response.json()) as TimelineResponse;
       setDemo((current) => {
@@ -244,7 +265,28 @@ export default function Home() {
         };
       });
       setSelectedGateId((current) => current ?? timeline.gates[0]?.id ?? null);
-      setAnalytics(await fetchAnalytics(sessionId));
+      setAnalytics(await fetchAnalytics(targetApiUrl, sessionId));
+    } catch {
+      return;
+    }
+  }
+
+  async function attachLatestLocalSession() {
+    try {
+      const response = await fetch(`${apiUrl}/sessions/latest`);
+      if (!response.ok) return;
+      const session = (await response.json()) as DemoResponse["session"];
+      if (demo?.session.id === session.id) return;
+      if (demo?.session.created_at && session.created_at) {
+        const currentCreated = Date.parse(demo.session.created_at);
+        const latestCreated = Date.parse(session.created_at);
+        if (Number.isFinite(currentCreated) && Number.isFinite(latestCreated) && latestCreated <= currentCreated) {
+          return;
+        }
+      }
+      window.localStorage.setItem(ACTIVE_API_STORAGE_KEY, apiUrl);
+      window.localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, session.id);
+      await refreshSession(session.id, apiUrl);
     } catch {
       return;
     }
@@ -254,7 +296,7 @@ export default function Home() {
     setSlackLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_URL}/demo/slack/send`, {
+      const response = await fetch(`${apiUrl}/demo/slack/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ channel_id: slackChannel }),
@@ -281,7 +323,7 @@ export default function Home() {
         : { reason: decisionNote };
 
     try {
-      const response = await fetch(`${API_URL}/gates/${gate.id}/${action}`, {
+      const response = await fetch(`${apiUrl}/gates/${gate.id}/${action}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -297,7 +339,7 @@ export default function Home() {
           timeline: { ...current.timeline, gates: current.timeline.gates.map(replace) },
         };
       });
-      setAnalytics(await fetchAnalytics(updated.session_id));
+      setAnalytics(await fetchAnalytics(apiUrl, updated.session_id));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to submit decision");
     }
@@ -396,7 +438,7 @@ export default function Home() {
                 traces={traces}
                 selectedGate={selectedGate}
                 traceByProposal={traceByProposal}
-                apiUrl={API_URL}
+                apiUrl={apiUrl}
                 codexPrompt={codexPrompt}
                 localGuardMode={localGuardMode}
                 decisionNote={decisionNote}
@@ -430,8 +472,8 @@ export default function Home() {
   );
 }
 
-async function fetchAnalytics(sessionId: string) {
-  const response = await fetch(`${API_URL}/sessions/${sessionId}/analytics`);
+async function fetchAnalytics(apiUrl: string, sessionId: string) {
+  const response = await fetch(`${apiUrl}/sessions/${sessionId}/analytics`);
   if (!response.ok) throw new Error(`Analytics failed with ${response.status}`);
   return (await response.json()) as LedgerAnalytics;
 }

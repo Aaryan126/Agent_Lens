@@ -168,11 +168,11 @@ def _file_change_proposals(
 
 def _normalize_tool_name(tool_name: str, params: dict[str, Any] | str | Any) -> str | None:
     lower = tool_name.lower()
-    if lower in {"shell", "exec", "terminal", "command"}:
+    if lower in {"bash", "shell", "exec", "terminal", "command"}:
         return "shell.run"
-    if lower in {"read", "fs.read", "file_read"}:
+    if lower in {"read", "fs.read", "file_read", "read_file"}:
         return "fs.read"
-    if lower in {"write", "fs.write", "file_write", "apply_patch"}:
+    if lower in {"edit", "write", "fs.write", "file_write", "apply_patch"}:
         return "fs.write"
     if lower in {"delete", "fs.delete", "file_delete"}:
         return "fs.delete"

@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|apply_patch|Edit|Write|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$(git rev-parse --show-toplevel)/backend\" && uv run agentlens-hook PreToolUse --repo \"$(git rev-parse --show-toplevel)\" --session-file \"$(git rev-parse --show-toplevel)/.agentlens/codex_hook_session.json\"",
+            "timeout": 10,
+            "statusMessage": "Mirroring tool proposal to AgentLens"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "Bash|apply_patch|Edit|Write|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$(git rev-parse --show-toplevel)/backend\" && uv run agentlens-hook PermissionRequest --repo \"$(git rev-parse --show-toplevel)\" --session-file \"$(git rev-parse --show-toplevel)/.agentlens/codex_hook_session.json\"",
+            "timeout": 10,
+            "statusMessage": "Checking AgentLens approval context"
+          }
+        ]
+      }
+    ]
+  }
+}

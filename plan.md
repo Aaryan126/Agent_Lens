@@ -179,3 +179,10 @@ command now prints a session-specific dashboard URL, and the frontend restores s
 from `?session=...`, so locally mirrored Codex runs appear immediately in the dashboard.
 Further work should investigate Codex's experimental app-server / remote-control protocol
 before promising attachment to an arbitrary already-open Codex TUI session.
+
+Second follow-up status: first native Codex TUI attachment is implemented through
+project-local Codex hooks. `.codex/hooks.json` mirrors `PreToolUse` and
+`PermissionRequest` events into the local guard through `agentlens-hook`, while the local
+frontend polls `/sessions/latest` so hook-created sessions appear without a dashboard
+link. This still needs live interactive validation and payload-shape hardening before it
+should be presented as the primary production path.

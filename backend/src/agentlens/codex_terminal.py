@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 import httpx
 
@@ -50,7 +51,7 @@ def main() -> None:
     dashboard_url = args.dashboard_url.rstrip("/")
     repo = str(Path(args.repo).expanduser().resolve())
     session_id = args.session_id or _create_session(api_url, prompt, repo)
-    session_dashboard_url = f"{dashboard_url}?session={session_id}"
+    session_dashboard_url = f"{dashboard_url}?{urlencode({'session': session_id, 'api': api_url})}"
 
     print(f"AgentLens session: {session_id}")
     print(f"Dashboard API:     {api_url}")
