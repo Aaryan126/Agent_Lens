@@ -66,6 +66,7 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 - A first native Codex TUI integration is implemented through project-local hooks in `.codex/hooks.json` and the `agentlens-hook` console script. Normal interactive Codex sessions can mirror `PreToolUse` and `PermissionRequest` events into the local AgentLens guard after the user reviews/trusts the hooks with `/hooks`.
 - The local API now exposes `GET /sessions/latest`, and the local frontend polls it so hook-created sessions can appear without a session-specific URL.
 - `agentlens-hook` now recovers when `.agentlens/codex_hook_session.json` points at a session from a previous in-memory guard process. A `404 session not found` response triggers fresh session creation and a retry.
+- The dashboard no longer shows the web-launched Codex task composer. The primary local workflow is now the normal Codex terminal plus project hooks, with the UI acting as a passive review and ledger console.
 
 ## Known Gaps
 

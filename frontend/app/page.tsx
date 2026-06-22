@@ -137,15 +137,11 @@ export default function Home() {
   const [demo, setDemo] = useState<DemoResponse | null>(null);
   const [analytics, setAnalytics] = useState<LedgerAnalytics | null>(null);
   const [selectedGateId, setSelectedGateId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const [slackLoading, setSlackLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [health, setHealth] = useState<HealthState>("checking");
   const [apiUrl, setApiUrl] = useState(DEFAULT_API_URL);
   const [slackChannel, setSlackChannel] = useState(DEFAULT_SLACK_CHANNEL);
-  const [codexPrompt, setCodexPrompt] = useState(
-    "Inspect this repo and propose the next implementation step.",
-  );
   const [decisionNote, setDecisionNote] = useState("Reviewed in AgentLens hosted console.");
   const [slackResult, setSlackResult] = useState<SlackSendResult | null>(null);
 
@@ -212,44 +208,6 @@ export default function Home() {
     void attachLatestLocalSession();
     return () => window.clearInterval(interval);
   }, [apiUrl, demo?.session.id, localGuardMode]);
-
-  async function createDemo() {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(localGuardMode ? `${apiUrl}/codex/sessions` : `${apiUrl}/sessions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          localGuardMode
-            ? {
-                prompt: codexPrompt,
-                repo_path: ".",
-                sandbox: "read-only",
-              }
-            : {
-                original_instruction: codexPrompt,
-                repo_path: ".",
-              },
-        ),
-      });
-      if (!response.ok) throw new Error(`Session failed with ${response.status}`);
-      const body = await response.json();
-      const session = (localGuardMode ? body.session : body) as DemoResponse["session"];
-      window.localStorage.setItem(ACTIVE_API_STORAGE_KEY, apiUrl);
-      window.localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, session.id);
-      const nextGates = localGuardMode ? ((body.timeline?.gates ?? []) as Gate[]) : [];
-      const nextTraces = localGuardMode ? ((body.timeline?.traces ?? []) as TraceEvent[]) : [];
-      setDemo({ session, gates: nextGates, timeline: { traces: nextTraces, gates: nextGates } });
-      setSelectedGateId(nextGates.find((gate) => gate.status === "pending")?.id ?? nextGates[0]?.id ?? null);
-      setAnalytics(await fetchAnalytics(apiUrl, session.id));
-      setActiveView("review");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to start supervision");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function refreshSession(sessionId: string, targetApiUrl = apiUrl) {
     try {
@@ -415,14 +373,6 @@ export default function Home() {
               </Notice>
             ) : null}
 
-            <TaskComposer
-              value={codexPrompt}
-              loading={loading}
-              localGuardMode={localGuardMode}
-              onChange={setCodexPrompt}
-              onStart={createDemo}
-            />
-
             <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
               <Metric label="Session" value={demo ? demo.session.id.slice(0, 13) : "Idle"} />
               <Metric label="Trace Events" value={String(traces.length)} />
@@ -439,7 +389,6 @@ export default function Home() {
                 selectedGate={selectedGate}
                 traceByProposal={traceByProposal}
                 apiUrl={apiUrl}
-                codexPrompt={codexPrompt}
                 localGuardMode={localGuardMode}
                 decisionNote={decisionNote}
                 onSelectGate={setSelectedGateId}
@@ -450,7 +399,7 @@ export default function Home() {
               />
             ) : null}
             {activeView === "trajectory" ? (
-              <TrajectoryView gates={gates} traces={traces} traceByProposal={traceByProposal} onCreate={createDemo} />
+              <TrajectoryView gates={gates} traces={traces} traceByProposal={traceByProposal} />
             ) : null}
             {activeView === "policies" ? <PolicyLedgerView gates={gates} /> : null}
             {activeView === "slack" ? (
@@ -485,7 +434,6 @@ function ReviewView({
   selectedGate,
   traceByProposal,
   apiUrl,
-  codexPrompt,
   localGuardMode,
   decisionNote,
   onSelectGate,
@@ -500,7 +448,6 @@ function ReviewView({
   selectedGate: Gate | null;
   traceByProposal: Map<string, TraceEvent>;
   apiUrl: string;
-  codexPrompt: string;
   localGuardMode: boolean;
   decisionNote: string;
   onSelectGate: (id: string) => void;
@@ -525,7 +472,6 @@ function ReviewView({
           <EmptyQueue
             sessionId={demo?.session.id ?? null}
             apiUrl={apiUrl}
-            codexPrompt={codexPrompt}
             localGuardMode={localGuardMode}
           />
         ) : (
@@ -553,66 +499,14 @@ function ReviewView({
   );
 }
 
-function TaskComposer({
-  value,
-  loading,
-  localGuardMode,
-  onChange,
-  onStart,
-}: {
-  value: string;
-  loading: boolean;
-  localGuardMode: boolean;
-  onChange: (value: string) => void;
-  onStart: () => void;
-}) {
-  return (
-    <section className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_180px] xl:items-end">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Codex Task</p>
-            <Badge label={localGuardMode ? "Local Guard" : "Hosted Bridge"} tone="neutral" />
-          </div>
-          <label className="sr-only" htmlFor="codex-task">
-            Codex task
-          </label>
-          <textarea
-            id="codex-task"
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            rows={3}
-            className="mt-3 w-full resize-none rounded-md border border-neutral-300 bg-white px-3 py-3 text-sm leading-6 outline-none focus:border-neutral-950"
-            placeholder="Ask Codex to inspect, implement, refactor, or verify something in this repo."
-          />
-          <p className="mt-2 text-xs leading-5 text-neutral-500">
-            {localGuardMode
-              ? "Runs Codex on this Mac through agentlens-guard, then gates risky tool calls locally."
-              : "Creates a hosted review session and shows the local adapter command for forwarding Codex events."}
-          </p>
-        </div>
-        <button
-          onClick={onStart}
-          disabled={loading || !value.trim()}
-          className="h-11 whitespace-nowrap rounded-md bg-neutral-950 px-4 text-sm font-semibold text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-400"
-        >
-          {loading ? "Starting Session" : "Start Supervision"}
-        </button>
-      </div>
-    </section>
-  );
-}
-
 function TrajectoryView({
   gates,
   traces,
   traceByProposal,
-  onCreate,
 }: {
   gates: Gate[];
   traces: TraceEvent[];
   traceByProposal: Map<string, TraceEvent>;
-  onCreate: () => void;
 }) {
   return (
     <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -621,9 +515,7 @@ function TrajectoryView({
         {gates.length === 0 ? (
           <EmptyPanel
             title="No trajectory yet"
-            body="Start supervision to capture Codex actions and generate predicted next steps with commitment points."
-            action="Start Supervision"
-            onAction={onCreate}
+            body="Use Codex normally in the terminal. AgentLens will attach to the local hook session when Codex proposes tool calls."
           />
         ) : (
           <div className="mt-5 grid gap-3">
@@ -879,17 +771,12 @@ function InspectionBatchRow({ count }: { count: number }) {
 function EmptyQueue({
   sessionId,
   apiUrl,
-  codexPrompt,
   localGuardMode,
 }: {
   sessionId: string | null;
   apiUrl: string;
-  codexPrompt: string;
   localGuardMode: boolean;
 }) {
-  const command = sessionId
-    ? `cd backend && uv run agentlens-demo --api-url ${apiUrl} --session-id ${sessionId} --repo /path/to/your/repo --codex-prompt ${JSON.stringify(codexPrompt)}`
-    : null;
   const rows = [
     ["Low", "File Read", "Auto Execute", "Read-only inspection enters the ledger."],
     ["Medium", "File Write", "Require Approval", "Source changes receive trajectory and drift analysis."],
@@ -903,13 +790,14 @@ function EmptyQueue({
             <p className="text-sm font-semibold">Live session is listening</p>
             <p className="mt-1 text-sm leading-6 text-neutral-600">
               {localGuardMode
-                ? "The local guard is connected. Start Supervision runs Codex on this machine and writes events into this local ledger."
-                : "Run the adapter from your machine. It executes Codex locally, parses real Codex JSON events, and posts proposed tool calls into this hosted review queue."}
+                ? "The local guard is connected. Continue working in your normal Codex terminal; hook events will populate this queue automatically."
+                : "Run the local adapter from your machine to forward Codex events into this hosted review queue."}
             </p>
           </div>
           {!localGuardMode ? (
             <code className="block overflow-x-auto rounded-md border border-neutral-200 bg-neutral-950 p-3 text-xs leading-6 text-neutral-100">
-              {command}
+              cd backend && uv run agentlens-codex --api-url {apiUrl} --repo /path/to/your/repo
+              &quot;Inspect this repo&quot;
             </code>
           ) : null}
           <div className="grid gap-0 divide-y divide-neutral-100 border border-neutral-200">
@@ -928,6 +816,13 @@ function EmptyQueue({
         </div>
       ) : (
         <div className="grid gap-0 divide-y divide-neutral-100">
+          <div className="px-4 py-4">
+            <p className="text-sm font-semibold">Waiting for Codex activity</p>
+            <p className="mt-1 text-sm leading-6 text-neutral-600">
+              Keep using Codex in the terminal. AgentLens will attach when hooks mirror the
+              first tool proposal into the local guard.
+            </p>
+          </div>
           {rows.map(([risk, action, policy, note]) => (
             <div
               key={action}
@@ -1013,7 +908,8 @@ function Inspector({
       <aside className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
         <PanelTitle eyebrow="Inspector" title="No Action Selected" />
         <p className="mt-4 text-sm leading-6 text-neutral-600">
-          Start supervision to inspect risk, trajectory, drift, policy, and approval controls.
+          Use Codex normally in the terminal. When a hook mirrors a tool proposal, select it here
+          to inspect risk, trajectory, drift, policy, and approval controls.
         </p>
         <div className="mt-6 grid gap-2">
           <Fact label="Review Mode" value="Pending Gate" />
@@ -1253,19 +1149,21 @@ function EmptyPanel({
 }: {
   title: string;
   body: string;
-  action: string;
-  onAction: () => void;
+  action?: string;
+  onAction?: () => void;
 }) {
   return (
     <div className="mt-5 border border-dashed border-neutral-300 bg-neutral-50 p-5">
       <p className="font-semibold">{title}</p>
       <p className="mt-2 text-sm leading-6 text-neutral-600">{body}</p>
-      <button
-        onClick={onAction}
-        className="mt-4 h-10 rounded-md bg-neutral-950 px-4 text-sm font-semibold text-white hover:bg-neutral-800"
-      >
-        {action}
-      </button>
+      {action && onAction ? (
+        <button
+          onClick={onAction}
+          className="mt-4 h-10 rounded-md bg-neutral-950 px-4 text-sm font-semibold text-white hover:bg-neutral-800"
+        >
+          {action}
+        </button>
+      ) : null}
     </div>
   );
 }
