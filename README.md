@@ -142,6 +142,8 @@ If Codex says hooks need review, type `/hooks`, inspect the AgentLens hook comma
 trust them for this project. After that, use Codex normally. `PreToolUse` and
 `PermissionRequest` hook events are mirrored into AgentLens through `uv run
 agentlens-hook`, while local hook state is stored under `.agentlens/` and ignored by git.
+If you restart `agentlens-guard`, the hook automatically creates a fresh AgentLens
+session if the remembered local session no longer exists.
 
 For hosted judging or remote viewing, start supervision in the web console, then run the
 command shown in the empty review queue from your local checkout. It uses the Codex CLI

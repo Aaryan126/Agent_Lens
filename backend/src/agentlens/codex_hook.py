@@ -39,23 +39,38 @@ def main() -> None:
     payload = _load_payload(raw)
     api_url = args.api_url.rstrip("/")
     repo = str(Path(args.repo).expanduser().resolve())
-    session_id = os.environ.get("AGENTLENS_SESSION_ID") or _load_or_create_session(
-        api_url=api_url,
-        session_file=Path(args.session_file),
-        repo=repo,
-        payload=payload,
-        event_name=args.event,
-    )
+    session_file = Path(args.session_file)
+    session_id = os.environ.get("AGENTLENS_SESSION_ID") or _load_session_id(session_file)
+    if session_id is None:
+        session_id = _create_session(
+            api_url=api_url,
+            session_file=session_file,
+            repo=repo,
+            payload=payload,
+            event_name=args.event,
+        )
     proposal = _proposal_from_hook(payload, event_name=args.event, session_id=session_id)
     if proposal is None:
         return
 
     try:
-        with httpx.Client(timeout=10) as client:
-            client.post(
-                f"{api_url}/sessions/{session_id}/tool-calls",
-                json=proposal.model_dump(mode="json"),
-            ).raise_for_status()
+        _post_proposal(api_url=api_url, session_id=session_id, proposal=proposal)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code != 404 or os.environ.get("AGENTLENS_SESSION_ID"):
+            print(f"AgentLens hook mirror failed: {exc}", file=sys.stderr)
+            return
+        try:
+            session_id = _create_session(
+                api_url=api_url,
+                session_file=session_file,
+                repo=repo,
+                payload=payload,
+                event_name=args.event,
+            )
+            proposal.session_id = session_id
+            _post_proposal(api_url=api_url, session_id=session_id, proposal=proposal)
+        except Exception as retry_exc:
+            print(f"AgentLens hook mirror retry failed: {retry_exc}", file=sys.stderr)
     except Exception as exc:
         print(f"AgentLens hook mirror failed: {exc}", file=sys.stderr)
 
@@ -70,7 +85,18 @@ def _load_payload(raw: str) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {"value": payload}
 
 
-def _load_or_create_session(
+def _load_session_id(session_file: Path) -> str | None:
+    try:
+        stored = json.loads(session_file.read_text(encoding="utf-8"))
+        session_id = stored.get("session_id")
+        if isinstance(session_id, str) and session_id:
+            return session_id
+    except Exception:
+        return None
+    return None
+
+
+def _create_session(
     *,
     api_url: str,
     session_file: Path,
@@ -79,14 +105,6 @@ def _load_or_create_session(
     event_name: str,
 ) -> str:
     session_file = Path(session_file)
-    try:
-        stored = json.loads(session_file.read_text(encoding="utf-8"))
-        session_id = stored.get("session_id")
-        if isinstance(session_id, str) and session_id:
-            return session_id
-    except Exception:
-        pass
-
     original_instruction = _find_first_string(
         payload,
         {"prompt", "user_prompt", "instruction", "input", "message", "text"},
@@ -108,6 +126,14 @@ def _load_or_create_session(
         encoding="utf-8",
     )
     return session_id
+
+
+def _post_proposal(*, api_url: str, session_id: str, proposal: ToolCallProposal) -> None:
+    with httpx.Client(timeout=10) as client:
+        client.post(
+            f"{api_url}/sessions/{session_id}/tool-calls",
+            json=proposal.model_dump(mode="json"),
+        ).raise_for_status()
 
 
 def _proposal_from_hook(
