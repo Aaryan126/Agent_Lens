@@ -142,7 +142,7 @@ def test_remote_codex_mode_posts_parsed_proposals(monkeypatch, tmp_path) -> None
     assert requests[1][2]["tool_name"] == "shell.run"
 
 
-def test_agentlens_codex_command_creates_session_and_posts(monkeypatch, tmp_path) -> None:
+def test_agentlens_codex_command_creates_session_and_posts(monkeypatch, tmp_path, capsys) -> None:
     requests: list[tuple[str, str, dict[str, object]]] = []
 
     class FakeClient:
@@ -199,3 +199,5 @@ def test_agentlens_codex_command_creates_session_and_posts(monkeypatch, tmp_path
     assert requests[0][1] == "http://127.0.0.1:8787/sessions"
     assert requests[1][1] == "http://127.0.0.1:8787/sessions/ses_terminal/tool-calls"
     assert requests[1][2]["tool_name"] == "shell.run"
+    output = capsys.readouterr().out
+    assert "Dashboard:         http://localhost:3000?session=ses_terminal" in output

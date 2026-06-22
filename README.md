@@ -84,7 +84,9 @@ uv run agentlens-codex --repo /path/to/your/repo "What is this repo about?"
 ```
 
 This runs Codex locally, prints readable terminal output, and mirrors parsed Codex
-tool-call proposals into the local AgentLens dashboard.
+tool-call proposals into the local AgentLens dashboard. The command prints a dashboard
+URL like `http://localhost:3000?session=ses_...`; open that URL to view the exact
+session created by the terminal run.
 
 8. Run the frontend approval console against the local guard:
 
@@ -97,6 +99,12 @@ Open `http://localhost:3000`, then click **Start Supervision**. The UI starts a
 local guarded Codex run, renders incoming Codex tool calls in the decision queue,
 inspector, timeline, policy ledger, Slack surface, and audit views, and lets you approve,
 block, or modify pending gates.
+
+For a terminal-first local workflow, keep `agentlens-guard` and the frontend running,
+then use `agentlens-codex` for each Codex task. This is the reliable integration path
+today because it uses Codex JSON events. Attaching to an arbitrary already-running Codex
+TUI session should be built against Codex's experimental app-server or remote-control
+protocol, not by scraping terminal output.
 
 For hosted judging or remote viewing, start supervision in the web console, then run the
 command shown in the empty review queue from your local checkout. It uses the Codex CLI

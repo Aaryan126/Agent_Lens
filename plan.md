@@ -174,4 +174,8 @@ endpoint instead of the hosted bridge flow.
 Follow-up status: terminal-first mirroring is implemented with `agentlens-codex`, letting
 developers run Codex from their normal terminal while AgentLens mirrors parsed tool calls
 into the dashboard. Low-risk inspection calls are collapsed in the review queue and
-timeline to keep the dashboard focused on meaningful supervision events.
+timeline to keep the dashboard focused on meaningful supervision events. The terminal
+command now prints a session-specific dashboard URL, and the frontend restores sessions
+from `?session=...`, so locally mirrored Codex runs appear immediately in the dashboard.
+Further work should investigate Codex's experimental app-server / remote-control protocol
+before promising attachment to an arbitrary already-open Codex TUI session.

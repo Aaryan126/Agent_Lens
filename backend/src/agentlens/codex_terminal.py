@@ -21,6 +21,11 @@ def main() -> None:
         default="http://127.0.0.1:8787",
         help="AgentLens API URL. Defaults to the local guard.",
     )
+    parser.add_argument(
+        "--dashboard-url",
+        default="http://localhost:3000",
+        help="AgentLens dashboard URL. Printed with the active session query parameter.",
+    )
     parser.add_argument("--session-id", default=None, help="Existing AgentLens session ID.")
     parser.add_argument("--model", default=None, help="Optional Codex model.")
     parser.add_argument(
@@ -42,11 +47,14 @@ def main() -> None:
         raise SystemExit("No Codex task provided.")
 
     api_url = args.api_url.rstrip("/")
+    dashboard_url = args.dashboard_url.rstrip("/")
     repo = str(Path(args.repo).expanduser().resolve())
     session_id = args.session_id or _create_session(api_url, prompt, repo)
+    session_dashboard_url = f"{dashboard_url}?session={session_id}"
 
     print(f"AgentLens session: {session_id}")
     print(f"Dashboard API:     {api_url}")
+    print(f"Dashboard:         {session_dashboard_url}")
     print("Running Codex locally...\n")
 
     result = CodexCliAdapter().run(

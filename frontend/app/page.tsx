@@ -161,7 +161,13 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const sessionId = window.localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY);
+    const params = new URLSearchParams(window.location.search);
+    const urlSessionId = params.get("session")?.trim();
+    if (urlSessionId) {
+      window.localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, urlSessionId);
+      setActiveView("review");
+    }
+    const sessionId = urlSessionId || window.localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY);
     if (sessionId) void refreshSession(sessionId);
   }, []);
 

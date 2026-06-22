@@ -60,6 +60,8 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 - Terminal-first Codex mirroring is implemented with `uv run agentlens-codex --repo ... "task"`. It creates or uses an AgentLens session, runs Codex locally, prints readable terminal output, and mirrors parsed tool-call proposals into the AgentLens API.
 - The frontend review queue and timeline now collapse low-risk auto-executed inspection calls into a single inspection batch so read-only exploration does not flood the dashboard.
 - Latest hosted smoke passed: every sidebar section switched content, `Start Supervision` created a real hosted session, remote CLI posting populated the review queue, and no horizontal overflow was detected on desktop or mobile.
+- Terminal-first mirroring now prints a session-specific dashboard URL, and the frontend loads `?session=...` links directly. This fixes the gap where `agentlens-codex` successfully posted events to the local guard but the browser stayed on an old or empty session.
+- Codex CLI surface review found experimental `app-server`, `remote-control`, and `exec-server` commands, but no stable first-pass command for subscribing to an arbitrary already-open Codex TUI session. The reliable path remains launching Codex through AgentLens JSON event mode; deeper always-on attachment should target the official Codex server protocol.
 
 ## Known Gaps
 
@@ -71,4 +73,5 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 
 1. Warm `https://agentlens-api-ggkh.onrender.com/health` before judging because Render free web services sleep after idle.
 2. Renew or upgrade Render Postgres before July 21, 2026 if the demo must remain live.
-3. Review the frontend npm audit finding before forcing dependency changes; the available audit fix is breaking.
+3. Investigate Codex's experimental app-server / remote-control protocol for a deeper terminal integration that can follow an interactive Codex session without replacing it.
+4. Review the frontend npm audit finding before forcing dependency changes; the available audit fix is breaking.
