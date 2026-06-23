@@ -43,10 +43,7 @@ class IntelligenceLayer:
         risk: RiskAssessment,
         trajectory_preview: str | None = None,
     ) -> IntelligenceCard:
-        summary = (
-            f"Agent wants to run {proposal.tool_name} with risk {risk.risk_level}. "
-            f"Evidence: {risk.evidence[0] if risk.evidence else 'no evidence available'}."
-        )
+        summary = self._fallback_summary(proposal, risk)
         return IntelligenceCard(
             proposal_id=proposal.id,
             summary=summary[:280],
@@ -406,6 +403,41 @@ class IntelligenceLayer:
         if cleaned and cleaned[-1] not in ".!?":
             cleaned = f"{cleaned}."
         return cleaned
+
+    def _fallback_summary(self, proposal: ToolCallProposal, risk: RiskAssessment) -> str:
+        target = self._proposal_target(proposal, risk)
+        evidence = risk.evidence[0] if risk.evidence else "no specific evidence recorded"
+        if proposal.tool_name == "fs.write":
+            action = f"Codex is proposing an edit to {target}"
+        elif proposal.tool_name == "fs.delete":
+            action = f"Codex is proposing to delete {target}"
+        elif proposal.tool_name == "fs.read":
+            action = f"Codex inspected {target}"
+        elif proposal.tool_name == "shell.run":
+            action = f"Codex is using a shell command around {target}"
+        else:
+            action = f"Codex is proposing {proposal.tool_name} on {target}"
+        return f"{action}. AgentLens rates this {risk.risk_level} risk because {evidence}."
+
+    def _proposal_target(self, proposal: ToolCallProposal, risk: RiskAssessment) -> str:
+        candidates: list[str] = []
+        candidates.extend(risk.affected_files)
+        params = proposal.params
+        paths = params.get("paths")
+        if isinstance(paths, list):
+            candidates.extend(str(path) for path in paths)
+        for key in ("path", "file", "target", "grant_root"):
+            value = params.get(key)
+            if isinstance(value, str):
+                candidates.append(value)
+        for candidate in candidates:
+            text = candidate.strip()
+            if not text or text in {".", "external state", "/dev/null", "2>/dev/null"}:
+                continue
+            if ">/dev/null" in text or text.startswith((">", "2>", "1>")):
+                continue
+            return text
+        return "the affected target"
 
     def _embed_pair(self, left: str, right: str) -> tuple[list[float], list[float]]:
         response = self.client.embeddings.create(

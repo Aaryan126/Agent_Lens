@@ -88,8 +88,36 @@ export type TraceEvent = {
   tool_name: string;
   params: Record<string, unknown>;
   stated_reason: string | null;
+  provider_metadata?: Record<string, unknown>;
   git_snapshot?: GitSnapshot;
   created_at?: string;
+};
+
+export type ActionDescriptor = {
+  human_title: string;
+  plain_action: string;
+  target_label: string;
+  technical_detail: string | null;
+  raw_detail: string | null;
+  evidence_summary: string;
+};
+
+export type ReviewEpisode = {
+  id: string;
+  session_id: string;
+  prompt: string;
+  kind: string;
+  status: GateStatus;
+  risk_level: RiskLevel;
+  confidence: number | null;
+  primary_gate_id: string | null;
+  trace_ids: string[];
+  gate_ids: string[];
+  descriptor: ActionDescriptor;
+  summary: string;
+  counts: Record<string, number>;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 export type SessionSummary = {
@@ -104,6 +132,7 @@ export type DemoResponse = {
   timeline: {
     traces: TraceEvent[];
     gates: Gate[];
+    episodes?: ReviewEpisode[];
   };
 };
 
@@ -111,6 +140,7 @@ export type TimelineResponse = {
   session: SessionSummary;
   traces: TraceEvent[];
   gates: Gate[];
+  episodes?: ReviewEpisode[];
 };
 
 export type CountBucket = {

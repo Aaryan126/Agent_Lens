@@ -16,6 +16,7 @@ class TraceEngine:
             tool_name=proposal.tool_name,
             params=proposal.params,
             stated_reason=proposal.stated_reason,
+            provider_metadata=proposal.provider_metadata,
             git_snapshot=self._git_snapshot(repo_path),
         )
 

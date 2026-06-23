@@ -45,8 +45,56 @@ def test_fallback_card_is_used_without_openai_key(tmp_path: Path, monkeypatch) -
         )
     )
     assert gate.intelligence_card is not None
-    assert "Agent wants to run fs.write" in gate.intelligence_card.summary
+    assert "Codex is proposing an edit to notes.md" in gate.intelligence_card.summary
     assert "OpenAI intelligence is configured" in gate.intelligence_card.trajectory_preview
+
+
+def test_timeline_includes_review_episodes_for_small_doc_edit(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "replace_me")
+    (tmp_path / "architecture.md").write_text("one\none\n", encoding="utf-8")
+    storage = InMemoryStore()
+    session = AgentLensSession.start(
+        SessionStart(
+            original_instruction="Delete a redundant sentence in architecture.md.",
+            repo_path=str(tmp_path),
+        ),
+        storage=storage,
+    )
+
+    for command in [
+        "sed -n '1,80p' architecture.md 2>/dev/null",
+        "rg -n redundant architecture.md 2>/dev/null",
+        "sed -n '1,80p' architecture.md 2>/dev/null",
+    ]:
+        session.propose(
+            ToolCallProposal(
+                session_id=session.session.id,
+                tool_name="shell.run",
+                params={"command": command, "agentlens_prompt": session.session.original_instruction},
+                provider_metadata={"source": "codex_app_server_event", "passive": True},
+            )
+        )
+    write_gate = session.propose(
+        ToolCallProposal(
+            session_id=session.session.id,
+            tool_name="fs.write",
+            params={"path": "architecture.md", "agentlens_prompt": session.session.original_instruction},
+            confidence=0.7,
+        )
+    )
+
+    timeline = session.timeline()
+    targets = [episode.descriptor.target_label for episode in timeline.episodes]
+
+    assert "2>/dev/null" not in targets
+    assert any(target == "architecture.md" for target in targets)
+    assert any(episode.kind == "inspection_batch" for episode in timeline.episodes)
+    decision = next(episode for episode in timeline.episodes if write_gate.id in episode.gate_ids)
+    assert decision.primary_gate_id == write_gate.id
+    assert decision.descriptor.human_title == "Edit architecture.md"
 
 
 def test_hook_originated_pending_gate_uses_fast_card(tmp_path: Path, monkeypatch) -> None:

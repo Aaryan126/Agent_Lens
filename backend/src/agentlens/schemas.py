@@ -109,6 +109,7 @@ class TraceEvent(BaseModel):
     tool_name: str
     params: dict[str, Any]
     stated_reason: str | None = None
+    provider_metadata: dict[str, Any] = Field(default_factory=dict)
     git_snapshot: GitSnapshot = Field(default_factory=GitSnapshot)
     created_at: datetime = Field(default_factory=utc_now)
 
@@ -275,10 +276,38 @@ class Gate(BaseModel):
     resolved_at: datetime | None = None
 
 
+class ActionDescriptor(BaseModel):
+    human_title: str
+    plain_action: str
+    target_label: str
+    technical_detail: str | None = None
+    raw_detail: str | None = None
+    evidence_summary: str
+
+
+class ReviewEpisode(BaseModel):
+    id: str
+    session_id: str
+    prompt: str
+    kind: str
+    status: GateStatus
+    risk_level: RiskLevel
+    confidence: float | None = None
+    primary_gate_id: str | None = None
+    trace_ids: list[str] = Field(default_factory=list)
+    gate_ids: list[str] = Field(default_factory=list)
+    descriptor: ActionDescriptor
+    summary: str
+    counts: dict[str, int] = Field(default_factory=dict)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
 class Timeline(BaseModel):
     session: Session
     traces: list[TraceEvent]
     gates: list[Gate]
+    episodes: list[ReviewEpisode] = Field(default_factory=list)
 
 
 class CountBucket(BaseModel):

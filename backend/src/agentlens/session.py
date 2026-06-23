@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from agentlens.config import load_config, load_settings
+from agentlens.episodes import build_review_episodes
 from agentlens.intelligence import IntelligenceLayer
 from agentlens.policy import PolicyEngine
 from agentlens.risk import SemanticRiskClassifier
@@ -93,7 +94,12 @@ class AgentLensSession:
 
     def timeline(self) -> Timeline:
         traces, gates = self.storage.timeline(self.session.id)
-        return Timeline(session=self.session, traces=traces, gates=gates)
+        return Timeline(
+            session=self.session,
+            traces=traces,
+            gates=gates,
+            episodes=build_review_episodes(session=self.session, traces=traces, gates=gates),
+        )
 
     def explain(self, gate_id: str) -> ExplainMoreResponse:
         gate = self.storage.gates.get(gate_id)

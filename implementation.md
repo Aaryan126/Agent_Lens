@@ -240,6 +240,19 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
   after the native TUI has already continued. Validation passed: targeted proxy,
   app-server, session API, and dev-stack tests reported 37 passed with 1 existing
   Starlette/httpx deprecation warning, and targeted backend ruff passed.
+- The ledger now has a backend-owned review episode layer. `Timeline` responses include
+  computed `ReviewEpisode` records with human-facing `ActionDescriptor` data, primary gate
+  links, raw trace/gate ids, status/risk/confidence, and grouped counts. Episode building
+  collapses repeated inspections/passive telemetry by prompt, target, action family, and
+  actionability while keeping raw traces/gates unchanged for auditability. Fallback
+  summaries now describe concrete intent and target instead of leading with raw tool names.
+  The frontend Review Queue, Flow Map, Trajectory, embedded timeline, and Audit Events
+  views render episodes first, so small edits such as `architecture.md` sentence changes no
+  longer appear as repeated shell nodes or rows, and shell redirection fragments such as
+  `2>/dev/null` are kept as raw detail rather than primary labels. Validation passed:
+  `UV_CACHE_DIR=.uv-cache env -u AGENTLENS_DISABLE_HOOKS uv run pytest tests/test_session_api.py tests/test_policy_risk.py`
+  reported 29 passed with 1 warning, frontend `npm run build` passed, and backend
+  `./.venv/bin/ruff check .` passed.
 - Frontend operator console polish pass: the sidebar is now sticky, full-height, and
   collapsible to an icon-only mode with its bottom status indicators always visible.
   Main-page spacing was tightened to a consistent `gap-5` rhythm, the gate queue table

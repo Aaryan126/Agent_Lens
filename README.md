@@ -35,6 +35,8 @@ The web surface is now a professional session ledger rather than only a live app
 dashboard. It keeps the core PRD model intact: Codex remains the primary work surface,
 Slack/native Codex prompts interrupt when judgment is needed, and the dashboard is where
 operators replay the session and inspect evidence.
+The UI is designed for fast operator review, with dense queues, evidence-first panels,
+and approval controls that keep risky agent actions easy to inspect before execution.
 - TanStack Table powers the gate queue with clear selected-row state and dense decision
   columns.
 - Recharts renders ledger analytics for approval patterns, risk distribution, and trust
@@ -48,6 +50,10 @@ operators replay the session and inspect evidence.
   deterministic fallback when OpenAI credentials are unavailable.
 - The UI follows the active local Codex session by default and can pin a specific session
   or gate when multiple terminals are running.
+- The timeline API now computes review episodes from raw traces and gates. The Review
+  Queue, Flow Map, Trajectory, and Audit Events views default to these human-facing
+  episodes, collapsing repeated inspections and passive telemetry while keeping raw
+  trace/gate records available for audit detail.
 
 ## Policy Management
 

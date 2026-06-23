@@ -75,6 +75,7 @@ import type {
   PolicyConfigResponse,
   PolicyRule,
   PolicyTestResponse,
+  ReviewEpisode,
   RiskLevel,
   SessionSummary,
   SlackSendResult,
@@ -85,6 +86,8 @@ import {
   formatPercent,
   gateTarget,
   healthLabel,
+  episodePrimaryGate,
+  episodeTraceCount,
   isInspectionGate,
   isInspectionTrace,
   riskChip,
@@ -99,13 +102,14 @@ import {
 
 type GateRow = {
   id: string;
+  episode: ReviewEpisode;
   risk: RiskLevel;
   action: string;
   target: string;
   policy: string;
   status: GateStatus;
   confidence: number;
-  gate: Gate;
+  gate: Gate | null;
   trace?: TraceEvent;
 };
 
@@ -327,6 +331,7 @@ export function ReviewLedger({
   gates,
   traces,
   selectedGate,
+  episodes,
   traceByProposal,
   analytics,
   trustScore,
@@ -345,6 +350,7 @@ export function ReviewLedger({
   gates: Gate[];
   traces: TraceEvent[];
   selectedGate: Gate | null;
+  episodes: ReviewEpisode[];
   traceByProposal: Map<string, TraceEvent>;
   analytics: LedgerAnalytics | null;
   trustScore: number | null;
@@ -376,12 +382,13 @@ export function ReviewLedger({
         ) : (
           <GateTable
             gates={gates}
+            episodes={episodes}
             selectedGate={selectedGate}
             traceByProposal={traceByProposal}
             onSelectGate={onSelectGate}
           />
         )}
-        <TimelineAnalyticsTabs traces={traces} gates={gates} analytics={analytics} trustScore={trustScore} />
+        <TimelineAnalyticsTabs traces={traces} gates={gates} episodes={episodes} analytics={analytics} trustScore={trustScore} />
       </div>
 
       <GateInspector
@@ -402,11 +409,13 @@ export function ReviewLedger({
 
 export function GateTable({
   gates,
+  episodes,
   selectedGate,
   traceByProposal,
   onSelectGate,
 }: {
   gates: Gate[];
+  episodes: ReviewEpisode[];
   selectedGate: Gate | null;
   traceByProposal: Map<string, TraceEvent>;
   onSelectGate: (id: string) => void;
@@ -414,20 +423,18 @@ export function GateTable({
   const [sorting, setSorting] = useState<SortingState>([]);
   const [filterText, setFilterText] = useState("");
 
-  const inspectionGates = gates.filter((gate) =>
-    isInspectionGate(gate, traceByProposal.get(gate.proposal_id)),
-  );
+  const inspectionEpisodes = episodes.filter((episode) => episode.kind === "inspection_batch");
 
   const filteredGates = useMemo(() => {
-    if (!filterText.trim()) return gates;
+    if (!filterText.trim()) return episodes;
     const query = filterText.toLowerCase();
-    return gates.filter((gate) => {
-      const trace = traceByProposal.get(gate.proposal_id);
-      const actionLabel = toolLabel(trace?.tool_name).toLowerCase();
-      const targetLabel = gateTarget(gate, trace).toLowerCase();
-      const summaryLabel = (gate.intelligence_card?.summary ?? trace?.stated_reason ?? "").toLowerCase();
-      const policyLabel = (gate.policy_decision.matched_policy ?? "Semantic Risk").toLowerCase();
-      const statusLabel = gate.status.toLowerCase();
+    return episodes.filter((episode) => {
+      const gate = episodePrimaryGate(episode, gates);
+      const actionLabel = episode.descriptor.human_title.toLowerCase();
+      const targetLabel = episode.descriptor.target_label.toLowerCase();
+      const summaryLabel = episode.summary.toLowerCase();
+      const policyLabel = (gate?.policy_decision.matched_policy ?? "Semantic Risk").toLowerCase();
+      const statusLabel = episode.status.toLowerCase();
 
       return (
         actionLabel.includes(query) ||
@@ -437,32 +444,34 @@ export function GateTable({
         statusLabel.includes(query)
       );
     });
-  }, [gates, filterText, traceByProposal]);
+  }, [episodes, filterText, gates]);
 
   const rows = useMemo<GateRow[]>(
     () =>
       filteredGates
-        .filter((gate) => !isInspectionGate(gate, traceByProposal.get(gate.proposal_id)))
-        .map((gate) => {
-          const trace = traceByProposal.get(gate.proposal_id);
+        .filter((episode) => episode.kind === "decision")
+        .map((episode) => {
+          const gate = episodePrimaryGate(episode, gates);
+          const trace = gate ? traceByProposal.get(gate.proposal_id) : undefined;
           return {
-            id: gate.id,
-            risk: gate.risk_assessment.risk_level,
-            action: toolLabel(trace?.tool_name),
-            target: gateTarget(gate, trace),
-            policy: gate.policy_decision.matched_policy ?? "Semantic Risk",
-            status: gate.status,
-            confidence: gate.intelligence_card?.confidence ?? 0,
+            id: episode.id,
+            episode,
+            risk: episode.risk_level,
+            action: episode.descriptor.human_title,
+            target: episode.descriptor.target_label,
+            policy: gate?.policy_decision.matched_policy ?? "Semantic Risk",
+            status: episode.status,
+            confidence: episode.confidence ?? gate?.intelligence_card?.confidence ?? 0,
             gate,
             trace,
           };
         })
         .sort((a, b) => Number(b.status === "pending") - Number(a.status === "pending")),
-    [filteredGates, traceByProposal],
+    [filteredGates, gates, traceByProposal],
   );
 
   const showInspectionBatch = useMemo(() => {
-    if (inspectionGates.length === 0) return false;
+    if (inspectionEpisodes.length === 0) return false;
     if (!filterText.trim()) return true;
     const query = filterText.toLowerCase();
     return (
@@ -470,7 +479,7 @@ export function GateTable({
       "collapsed".includes(query) ||
       "inspection".includes(query)
     );
-  }, [inspectionGates, filterText]);
+  }, [inspectionEpisodes, filterText]);
 
   const columns = useMemo<ColumnDef<GateRow>[]>(
     () => [
@@ -485,12 +494,10 @@ export function GateTable({
         cell: ({ row }) => (
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-neutral-950">
-              {row.original.action} on {row.original.target}
+              {row.original.action}
             </p>
             <p className="mt-1 line-clamp-1 text-xs leading-5 text-neutral-500">
-              {row.original.gate.intelligence_card?.summary
-                ?? row.original.trace?.stated_reason
-                ?? "No summary available."}
+              {row.original.episode.summary}
             </p>
           </div>
         ),
@@ -574,7 +581,7 @@ export function GateTable({
                   <div>
                     <p className="text-sm font-semibold text-neutral-900">Auto-Executed Inspection Batch</p>
                     <p className="mt-1 text-xs text-neutral-500">
-                      {inspectionGates.length} read-only shell/file inspection calls collapsed.
+                      {inspectionEpisodes.reduce((total, episode) => total + episodeTraceCount(episode), 0)} read-only shell/file inspection calls collapsed.
                     </p>
                   </div>
                 </td>
@@ -599,9 +606,9 @@ export function GateTable({
               table.getRowModel().rows.map((row) => (
                 <tr
                   key={row.id}
-                  onClick={() => onSelectGate(row.original.id)}
+                  onClick={() => row.original.gate ? onSelectGate(row.original.gate.id) : null}
                   className={`cursor-pointer border-b border-neutral-100 transition last:border-b-0 hover:bg-neutral-50 ${
-                    selectedGate?.id === row.original.id ? "bg-sky-50/70 shadow-[inset_3px_0_0_#0ea5e9]" : ""
+                    selectedGate?.id === row.original.gate?.id ? "bg-sky-50/70 shadow-[inset_3px_0_0_#0ea5e9]" : ""
                   }`}
                 >
                   {row.getVisibleCells().map((cell) => (
@@ -1093,12 +1100,15 @@ export function ConfidenceFactors({ gate }: { gate: Gate }) {
 export function TrajectoryView({
   gates,
   traces,
+  episodes,
   traceByProposal,
 }: {
   gates: Gate[];
   traces: TraceEvent[];
+  episodes: ReviewEpisode[];
   traceByProposal: Map<string, TraceEvent>;
 }) {
+  const decisionEpisodes = episodes.filter((episode) => episode.kind === "decision");
   return (
     <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] gap-6">
       <Panel>
@@ -1111,21 +1121,26 @@ export function TrajectoryView({
           <p className="text-sm text-neutral-500 mb-4">
             Predicted future actions based on current prompt and state.
           </p>
-          {gates.length === 0 ? (
+          {decisionEpisodes.length === 0 ? (
             <EmptyState
               title="No trajectory yet"
               body="Use Codex normally. AgentLens will record trajectory once a gate appears."
             />
           ) : (
             <div className="grid gap-3">
-              {gates.map((gate, index) => (
-                <TrajectoryCard
-                  key={gate.id}
-                  gate={gate}
-                  trace={traceByProposal.get(gate.proposal_id)}
-                  step={index + 1}
-                />
-              ))}
+              {decisionEpisodes.map((episode, index) => {
+                const gate = episodePrimaryGate(episode, gates);
+                if (!gate) return null;
+                return (
+                  <TrajectoryCard
+                    key={episode.id}
+                    episode={episode}
+                    gate={gate}
+                    trace={traceByProposal.get(gate.proposal_id)}
+                    step={index + 1}
+                  />
+                );
+              })}
             </div>
           )}
         </div>
@@ -1622,11 +1637,13 @@ export function SlackSurfaceView({
 export function AuditEventsView({
   gates,
   traces,
+  episodes,
   analytics,
   trustScore,
 }: {
   gates: Gate[];
   traces: TraceEvent[];
+  episodes: ReviewEpisode[];
   analytics: LedgerAnalytics | null;
   trustScore: number | null;
 }) {
@@ -1642,27 +1659,19 @@ export function AuditEventsView({
           <p className="text-sm text-neutral-500 mb-4">
             Every trace, policy decision, and human action is rendered as an audit record.
           </p>
-          {traces.length === 0 && gates.length === 0 ? (
+          {episodes.length === 0 ? (
             <EmptyState
               title="No audit events yet"
               body="Start a Codex session to populate the ledger."
             />
           ) : (
             <div className="grid gap-3">
-              {traces.map((trace, index) => (
+              {episodes.map((episode, index) => (
                 <LedgerRow
-                  key={trace.id}
-                  label={`Trace ${index + 1}`}
-                  title={toolLabel(trace.tool_name)}
-                  body={trace.stated_reason ?? summarizeTrace(trace)}
-                />
-              ))}
-              {gates.map((gate) => (
-                <LedgerRow
-                  key={gate.id}
-                  label={titleCase(gate.status)}
-                  title={`${titleCase(gate.risk_assessment.risk_level)} risk gate`}
-                  body={gate.intelligence_card?.summary ?? gate.policy_decision.reason}
+                  key={episode.id}
+                  label={`Episode ${index + 1} / ${titleCase(episode.kind)}`}
+                  title={episode.descriptor.human_title}
+                  body={`${episode.summary} Raw: ${episode.trace_ids.length} trace(s), ${episode.gate_ids.length} gate(s).`}
                 />
               ))}
             </div>
@@ -1735,7 +1744,7 @@ function TimelineLedger({ traces, gates, compact = false }: { traces: TraceEvent
   );
 }
 
-function TrajectoryCard({ gate, trace, step }: { gate: Gate; trace: TraceEvent | undefined; step: number }) {
+function TrajectoryCard({ episode, gate, trace, step }: { episode: ReviewEpisode; gate: Gate; trace: TraceEvent | undefined; step: number }) {
   return (
     <div className="grid gap-4 rounded-lg border border-neutral-200 bg-white p-4 md:grid-cols-[42px_minmax(0,1fr)_140px]">
       <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-950 text-sm font-semibold text-white">{step}</div>
@@ -1745,10 +1754,10 @@ function TrajectoryCard({ gate, trace, step }: { gate: Gate; trace: TraceEvent |
           <StatusBadge status={gate.status} />
         </div>
         <h3 className="mt-3 truncate text-base font-semibold">
-          {toolLabel(trace?.tool_name)} on {gateTarget(gate, trace)}
+          {episode.descriptor.human_title}
         </h3>
         <p className="mt-2 text-sm leading-6 text-neutral-600">
-          {gate.intelligence_card?.trajectory_preview ?? "No trajectory preview available."}
+          {gate.intelligence_card?.trajectory_preview ?? episode.summary}
         </p>
       </div>
       <div className="border-t border-neutral-200 pt-3 md:border-l md:border-t-0 md:pl-4 md:pt-0">
@@ -1841,11 +1850,13 @@ function SectionHeader({ eyebrow, title, body }: { eyebrow: string; title: strin
 export function TimelineAnalyticsTabs({
   traces,
   gates,
+  episodes,
   analytics,
   trustScore,
 }: {
   traces: TraceEvent[];
   gates: Gate[];
+  episodes: ReviewEpisode[];
   analytics: LedgerAnalytics | null;
   trustScore: number | null;
 }) {
@@ -1893,7 +1904,7 @@ export function TimelineAnalyticsTabs({
 
       <div className="p-6">
         {activeTab === "timeline" ? (
-          <TimelineContent traces={traces} gates={gates} />
+          <TimelineContent traces={traces} gates={gates} episodes={episodes} />
         ) : (
           <AnalyticsContent analytics={analytics} trustScore={trustScore} />
         )}
@@ -1902,10 +1913,7 @@ export function TimelineAnalyticsTabs({
   );
 }
 
-function TimelineContent({ traces, gates }: { traces: TraceEvent[]; gates: Gate[] }) {
-  const inspectionTraces = traces.filter((trace) => isInspectionTrace(trace));
-  const visibleTraces = traces.filter((trace) => !isInspectionTrace(trace));
-
+function TimelineContent({ traces, gates, episodes }: { traces: TraceEvent[]; gates: Gate[]; episodes: ReviewEpisode[] }) {
   if (traces.length === 0) {
     return (
       <EmptyState
@@ -1917,43 +1925,20 @@ function TimelineContent({ traces, gates }: { traces: TraceEvent[]; gates: Gate[
 
   return (
     <div className="relative border-l-2 border-neutral-200 pl-6 ml-3 space-y-6 py-1">
-      {inspectionTraces.length > 0 ? (
-        <div className="relative">
-          <span className="absolute -left-[31px] top-1 flex h-4 w-4 items-center justify-center rounded-full border border-emerald-400 bg-white">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-          </span>
-          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">Inspection Batch</p>
-          <p className="mt-1 text-sm font-semibold text-neutral-900">Captured and auto-executed</p>
-          <p className="mt-1 text-xs text-neutral-500 leading-relaxed">
-            {inspectionTraces.length} read-only commands and file queries collapsed.
-          </p>
-        </div>
-      ) : null}
-
-      {visibleTraces.map((trace, index) => (
-        <div key={trace.id} className="relative">
-          <span className="absolute -left-[31px] top-1 flex h-4 w-4 items-center justify-center rounded-full border border-neutral-400 bg-white">
-            <span className="h-1.5 w-1.5 rounded-full bg-neutral-600" />
+      {episodes.map((episode, index) => (
+        <div key={episode.id} className="relative">
+          <span className="absolute -left-[31px] top-1 flex h-4 w-4 items-center justify-center rounded-full border border-sky-400 bg-white">
+            <span className={`h-1.5 w-1.5 rounded-full ${episode.kind === "inspection_batch" ? "bg-emerald-500" : "bg-sky-500"}`} />
           </span>
           <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
-            Step {index + 1} &bull; {toolLabel(trace.tool_name)}
+            Step {index + 1} &bull; {titleCase(episode.kind)}
           </p>
-          <p className="mt-1 text-sm font-medium text-neutral-800">
-            {trace.stated_reason || summarizeTrace(trace)}
+          <p className="mt-1 text-sm font-semibold text-neutral-900">{episode.descriptor.human_title}</p>
+          <p className="mt-1 text-sm text-neutral-700 leading-relaxed">
+            {episode.summary}
           </p>
-        </div>
-      ))}
-
-      {gates.filter((gate) => gate.status !== "auto_executed").slice(-4).map((gate) => (
-        <div key={gate.id} className="relative">
-          <span className="absolute -left-[31px] top-1 flex h-4 w-4 items-center justify-center rounded-full border border-sky-400 bg-white">
-            <span className="h-1.5 w-1.5 rounded-full bg-sky-500 animate-pulse" />
-          </span>
-          <p className="text-xs font-semibold uppercase tracking-wider text-sky-700">
-            {titleCase(gate.status)} Gate
-          </p>
-          <p className="mt-1 text-sm text-neutral-700">
-            {gate.intelligence_card?.summary ?? gate.policy_decision.reason}
+          <p className="mt-1 text-xs text-neutral-500">
+            {episode.trace_ids.length} raw trace(s), {episode.gate_ids.length} gate record(s).
           </p>
         </div>
       ))}

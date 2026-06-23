@@ -19,13 +19,14 @@ import type {
   Gate,
   HealthState,
   LedgerAnalytics,
+  ReviewEpisode,
   SessionSummary,
   SlackSendResult,
   TimelineResponse,
   TraceEvent,
   View,
 } from "./types";
-import { analyticsWithGateFallback, isInspectionGate, isLocalApi } from "./utils";
+import { analyticsWithGateFallback, buildFallbackEpisodes, episodePrimaryGate, isInspectionGate, isLocalApi } from "./utils";
 
 const DEFAULT_API_URL = process.env.NEXT_PUBLIC_AGENTLENS_API_URL ?? "http://127.0.0.1:8000";
 const DEFAULT_SLACK_CHANNEL = "C0BBW328TEF";
@@ -62,6 +63,12 @@ export default function Home() {
     ?? gates.find((gate) => !isInspectionGate(gate, traceByProposal.get(gate.proposal_id)))
     ?? gates[0]
     ?? null;
+  const episodes = useMemo(
+    () => demo?.timeline.episodes?.length
+      ? demo.timeline.episodes
+      : buildFallbackEpisodes(gates, traces, traceByProposal),
+    [demo?.timeline.episodes, gates, traces, traceByProposal],
+  );
   const effectiveAnalytics = analyticsWithGateFallback(analytics, gates, demo?.session.id ?? null);
   const trustScore = effectiveAnalytics
     ? Math.round(effectiveAnalytics.trust_score.score * 100)
@@ -154,14 +161,19 @@ export default function Home() {
       setDemo({
         session: timeline.session,
         gates: timeline.gates,
-        timeline: { traces: timeline.traces, gates: timeline.gates },
+        timeline: { traces: timeline.traces, gates: timeline.gates, episodes: timeline.episodes ?? [] },
       });
       setSelectedGateId((current) => {
         const existing = timeline.gates.find((gate) => gate.id === current);
+        const primaryEpisodeGate =
+          (timeline.episodes ?? [])
+            .map((episode) => episodePrimaryGate(episode, timeline.gates))
+            .find((gate) => gate?.status === "pending")
+          ?? null;
         const firstPending = timeline.gates.find((gate) => gate.status === "pending");
         if (!existing) {
           if (current && sessionId === demo?.session.id) return current;
-          return firstPending?.id ?? timeline.gates[0]?.id ?? null;
+          return primaryEpisodeGate?.id ?? firstPending?.id ?? timeline.gates[0]?.id ?? null;
         }
         if (existing.status !== "pending" && firstPending) return firstPending.id;
         return current;
@@ -337,6 +349,7 @@ export default function Home() {
           gates={gates}
           traces={traces}
           selectedGate={selectedGate}
+          episodes={episodes}
           traceByProposal={traceByProposal}
           analytics={effectiveAnalytics}
           trustScore={trustScore}
@@ -357,6 +370,7 @@ export default function Home() {
           session={demo?.session ?? null}
           gates={gates}
           traces={traces}
+          episodes={episodes}
           traceByProposal={traceByProposal}
           apiUrl={apiUrl}
           localGuardMode={localGuardMode}
@@ -371,7 +385,7 @@ export default function Home() {
         />
       ) : null}
       {activeView === "trajectory" ? (
-        <TrajectoryView gates={gates} traces={traces} traceByProposal={traceByProposal} />
+        <TrajectoryView gates={gates} traces={traces} episodes={episodes} traceByProposal={traceByProposal} />
       ) : null}
       {activeView === "policies" ? <PolicyLedgerView gates={gates} apiUrl={apiUrl} /> : null}
       {activeView === "slack" ? (
@@ -384,7 +398,7 @@ export default function Home() {
         />
       ) : null}
       {activeView === "audit" ? (
-        <AuditEventsView gates={gates} traces={traces} analytics={effectiveAnalytics} trustScore={trustScore} />
+        <AuditEventsView gates={gates} traces={traces} episodes={episodes} analytics={effectiveAnalytics} trustScore={trustScore} />
       ) : null}
     </AppShell>
   );

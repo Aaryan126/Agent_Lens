@@ -33,10 +33,11 @@ import {
   XCircle,
 } from "lucide-react";
 
-import type { Gate, GateStatus, RiskLevel, SessionSummary, TraceEvent, ExplainMoreResponse } from "../types";
+import type { Gate, GateStatus, RiskLevel, SessionSummary, TraceEvent, ExplainMoreResponse, ReviewEpisode } from "../types";
 import {
   formatPercent,
   gateTarget,
+  episodePrimaryGate,
   statusChip,
   titleCase,
   toolLabel,
@@ -68,6 +69,7 @@ type FlowMapViewProps = {
   session: SessionSummary | null;
   gates: Gate[];
   traces: TraceEvent[];
+  episodes: ReviewEpisode[];
   traceByProposal: Map<string, TraceEvent>;
   apiUrl: string;
   localGuardMode: boolean;
@@ -91,17 +93,8 @@ export function FlowMapView(props: FlowMapViewProps) {
 
 type TaskGroup = {
   prompt: string;
-  items: FlowItem[];
+  items: ReviewEpisode[];
 };
-
-function getItemPrompt(item: FlowItem, sessionPrompt: string | undefined): string {
-  const trace = item.kind === "trace" ? item.trace : item.trace;
-  const prompt = trace?.params?.agentlens_prompt;
-  if (typeof prompt === "string" && prompt.trim()) {
-    return prompt.trim();
-  }
-  return sessionPrompt || "Original Task";
-}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -266,10 +259,59 @@ function StartNodeInspector({
   );
 }
 
+function EpisodeInspector({
+  episode,
+  onClose,
+}: {
+  episode: ReviewEpisode;
+  onClose: () => void;
+}) {
+  return (
+    <aside className="sticky top-5 flex max-h-[calc(100vh-1.5rem)] flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
+      <div className="flex items-start justify-between gap-4 border-b border-neutral-200 p-5 pb-4 bg-neutral-50/50">
+        <div className="min-w-0">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 bg-neutral-100 border border-neutral-200 rounded px-1.5 py-0.5">
+            {titleCase(episode.kind)}
+          </span>
+          <h3 className="mt-2 text-base font-bold text-neutral-900 leading-tight">
+            {episode.descriptor.human_title}
+          </h3>
+          <p className="mt-2 text-xs text-neutral-500 leading-relaxed">
+            {episode.trace_ids.length} raw trace(s), {episode.gate_ids.length} gate record(s).
+          </p>
+        </div>
+        <button
+          onClick={onClose}
+          className="text-neutral-400 hover:text-neutral-600 transition p-1"
+          title="Close Inspector"
+        >
+          <XCircle size={16} />
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+        <Section title="Narrative Summary">
+          <p>{episode.summary}</p>
+        </Section>
+        <Section title="Evidence">
+          <p>{episode.descriptor.evidence_summary}</p>
+        </Section>
+        {episode.descriptor.raw_detail ? (
+          <Section title="Raw Detail">
+            <code className="block rounded-md border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-700">
+              {episode.descriptor.raw_detail}
+            </code>
+          </Section>
+        ) : null}
+      </div>
+    </aside>
+  );
+}
+
 function FlowMapInner({
   session,
   gates,
   traces,
+  episodes,
   traceByProposal,
   apiUrl,
   localGuardMode,
@@ -288,12 +330,12 @@ function FlowMapInner({
   const interactive = true;
   const showGrid = true;
 
-  const ordered = useMemo(() => buildOrderedItems(gates, traces, traceByProposal), [gates, traces, traceByProposal]);
+  const ordered = useMemo(() => episodes, [episodes]);
 
   const groups = useMemo(() => {
     const list: TaskGroup[] = [];
     ordered.forEach((item) => {
-      const prompt = getItemPrompt(item, session?.original_instruction);
+      const prompt = item.prompt || session?.original_instruction || "Original Task";
       let lastGroup = list[list.length - 1];
       if (!lastGroup || lastGroup.prompt !== prompt) {
         lastGroup = { prompt, items: [] };
@@ -335,18 +377,14 @@ function FlowMapInner({
         const rowOffset = Math.floor(nodeIndexInGroup / ROW_CAPACITY);
         const x = col * (NODE_WIDTH + GAP_X);
         const y = (currentRow + rowOffset) * (NODE_HEIGHT + GAP_Y);
-        const id = itemId(item);
+        const id = item.id;
 
         const onSelect = () => setSelectedNodeId(id);
         const isSelected = selectedNodeId === id;
 
-        if (item.kind === "trace") {
-          nodes.push(traceNode(id, item.trace, { x, y }, onSelect, isSelected));
-        } else {
-          nodes.push(gateNode(id, item.gate, item.trace, { x, y }, onSelectGate, onSelect, isSelected));
-        }
+        nodes.push(episodeNode(id, item, gates, { x, y }, onSelectGate, onSelect, isSelected));
 
-        edges.push(flowEdge(lastId, id, item.kind === "gate" ? item.gate : null));
+        edges.push(flowEdge(lastId, id, episodePrimaryGate(item, gates)));
         lastId = id;
       });
 
@@ -434,7 +472,8 @@ function FlowMapInner({
       }
     }
 
-    const selectedGate = gates.find((g) => g.id === selectedNodeId || g.proposal_id === selectedNodeId);
+    const selectedEpisode = episodes.find((episode) => episode.id === selectedNodeId);
+    const selectedGate = selectedEpisode ? episodePrimaryGate(selectedEpisode, gates) : gates.find((g) => g.id === selectedNodeId || g.proposal_id === selectedNodeId);
     if (selectedGate) {
       return (
         <div className="flex flex-col gap-3">
@@ -459,6 +498,10 @@ function FlowMapInner({
           />
         </div>
       );
+    }
+
+    if (selectedEpisode) {
+      return <EpisodeInspector episode={selectedEpisode} onClose={() => setSelectedNodeId(null)} />;
     }
 
     const selectedTrace = traces.find((t) => t.id === selectedNodeId);
@@ -490,7 +533,7 @@ function FlowMapInner({
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-xs font-medium text-neutral-500">
-              {ordered.length} action{ordered.length === 1 ? "" : "s"}
+              {ordered.length} episode{ordered.length === 1 ? "" : "s"}
             </span>
             <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-neutral-600">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-2.5 py-1">
@@ -836,6 +879,45 @@ function gateNode(
       toolLabel: toolLabel(trace?.tool_name),
       target: gateTarget(gate, trace),
       onSelectGate,
+      onSelect,
+      isSelected,
+    },
+  };
+}
+
+function episodeNode(
+  id: string,
+  episode: ReviewEpisode,
+  gates: Gate[],
+  position: { x: number; y: number },
+  onSelectGate: (gateId: string) => void,
+  onSelect: () => void,
+  isSelected: boolean,
+): Node<FlowNodeData> {
+  const gate = episodePrimaryGate(episode, gates);
+  if (gate) {
+    return {
+      id,
+      type: "gate",
+      position,
+      data: {
+        gate,
+        toolLabel: titleCase(episode.kind),
+        target: episode.descriptor.human_title,
+        onSelectGate,
+        onSelect,
+        isSelected,
+      },
+    };
+  }
+  return {
+    id,
+    type: "trace",
+    position,
+    data: {
+      toolLabel: titleCase(episode.kind),
+      target: episode.descriptor.human_title,
+      reason: episode.summary,
       onSelect,
       isSelected,
     },

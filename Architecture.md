@@ -584,6 +584,108 @@ sequenceDiagram
 
 ---
 
+## Codex TUI to AgentLens Perception Flow
+
+This is the strict native TUI path. Codex keeps its normal terminal UI, but it is launched
+with `--remote ws://127.0.0.1:8791`, so app-server traffic passes through
+`agentlens-codex-proxy` before reaching the real Codex app-server.
+
+```mermaid
+flowchart LR
+    subgraph TUI["Codex TUI"]
+        USER_TASK[Developer prompt]
+        NATIVE_UI[Native terminal UI]
+        NATIVE_PROMPT[Native approval prompt]
+    end
+
+    subgraph PROXY["agentlens-codex-proxy"]
+        WS[WebSocket bridge<br/>127.0.0.1:8791]
+        ROUTER{Message type}
+        NORMALIZE[Normalize Codex payload<br/>tool, target, cwd, reason]
+        ENRICH[Inject AgentLens summary<br/>risk, evidence, dashboard metadata]
+    end
+
+    subgraph RAW["Codex app-server messages"]
+        START["thread/start + turn/start"]
+        APPROVAL["item/commandExecution/requestApproval<br/>item/fileChange/requestApproval<br/>item/permissions/requestApproval"]
+        TELEMETRY[Passive command/read telemetry]
+    end
+
+    subgraph AL["AgentLens perception"]
+        PROPOSAL[ToolCallProposal<br/>what Codex wants to do]
+        TRACE[TraceEvent<br/>what was observed]
+        CONTEXT[DecisionContext<br/>instruction + recent trace + git state]
+        RISK[RiskAssessment<br/>reversibility + blast radius]
+        POLICY[PolicyDecision<br/>standing rule or fallback]
+        CARD[IntelligenceCard<br/>trajectory, drift, confidence, translation]
+        GATE[Gate<br/>auto_executed, pending, blocked, approved]
+        EPISODE[ReviewEpisode<br/>human-facing grouped action]
+    end
+
+    subgraph BACKEND["AgentLens API + Ledger"]
+        TOOLCALLS["POST /sessions/{id}/tool-calls"]
+        OBSERVE["POST /gates/{id}/observe"]
+        DECISION["POST /gates/{id}/approve<br/>POST /gates/{id}/block<br/>POST /gates/{id}/modify"]
+        TIMELINE["GET /sessions/{id}/timeline"]
+    end
+
+    subgraph SERVER["Codex app-server"]
+        EXECUTE[Execute accepted command<br/>or file change]
+        CANCEL[Cancel rejected action]
+    end
+
+    subgraph LEDGER["Next.js ledger"]
+        QUEUE[Review Queue]
+        INSPECTOR[Inspector evidence]
+        FLOW[Flow Map + Audit Events]
+    end
+
+    USER_TASK --> NATIVE_UI
+    NATIVE_UI -->|WebSocket JSON-RPC| WS
+    WS --> START
+    WS --> APPROVAL
+    WS --> TELEMETRY
+
+    START -->|forward with approval policy + sandbox| SERVER
+    APPROVAL --> ROUTER
+    TELEMETRY --> ROUTER
+
+    ROUTER -->|approval request| NORMALIZE
+    ROUTER -->|already happened observation| NORMALIZE
+    NORMALIZE --> PROPOSAL
+    PROPOSAL --> TOOLCALLS
+    TOOLCALLS --> TRACE
+    TRACE --> CONTEXT
+    CONTEXT --> RISK
+    RISK --> POLICY
+    POLICY --> CARD
+    CARD --> GATE
+    GATE --> EPISODE
+
+    GATE -->|low risk| EXECUTE
+    GATE -->|passive telemetry| OBSERVE
+    OBSERVE --> EPISODE
+    GATE -->|pending| ENRICH
+    ENRICH --> NATIVE_PROMPT
+    NATIVE_PROMPT -->|approve / cancel| DECISION
+    DECISION -->|approved or modified| EXECUTE
+    DECISION -->|blocked| CANCEL
+
+    TIMELINE --> QUEUE
+    TIMELINE --> INSPECTOR
+    TIMELINE --> FLOW
+    EPISODE --> TIMELINE
+```
+
+AgentLens does not treat raw Codex traffic as final product truth. It perceives each
+app-server approval or telemetry message as a typed `ToolCallProposal`, then enriches it
+with repository state, policy matches, deterministic risk, and optional OpenAI-generated
+trajectory/drift/confidence evidence. The ledger renders `ReviewEpisode` objects so the
+operator sees meaningful actions such as "edit README" or "inspect backend routes" instead
+of a stream of low-level JSON-RPC messages.
+
+---
+
 ## Deployment Architecture
 
 ```mermaid

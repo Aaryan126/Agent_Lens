@@ -433,6 +433,13 @@ The deterministic fallback is used without OpenAI credentials; OpenAI-backed ans
 cost-aware routing when credentials are configured. The frontend Explain tab now posts
 questions to the backend and displays answer evidence plus the model/fallback role.
 
+Additional follow-up status: an intelligence-oriented review episode layer is implemented.
+`GET /sessions/{id}/timeline` now includes computed `ReviewEpisode` records alongside raw
+traces and gates. The frontend Review Queue, Flow Map, Trajectory, and Audit Events views
+render these episodes first, collapsing repeated inspection/passive telemetry and replacing
+raw command fragments such as `2>/dev/null` with target-focused action descriptors while
+preserving raw records for audit details.
+
 ## Phase 14A: One-Command Local Stack
 
 Reduce local workflow friction by replacing the four-terminal setup with one command that
