@@ -134,3 +134,47 @@ def test_policy_precedence_over_risk() -> None:
     decision = PolicyEngine(config).evaluate(proposal)
     assert decision.action == PolicyAction.AUTO_EXECUTE
     assert decision.matched_policy == "safe reads"
+
+
+def test_path_policy_matches_app_server_paths_list() -> None:
+    config = AgentLensConfig(
+        policies=[
+            PolicyRule(
+                name="block critical docs",
+                condition={"path_contains": ["README.md"]},
+                action=PolicyAction.BLOCK_AND_ALERT,
+            )
+        ]
+    )
+    proposal = ToolCallProposal(
+        session_id="ses_test",
+        tool_name="fs.write",
+        params={"path": "external state", "paths": ["/repo/README.md"]},
+    )
+
+    decision = PolicyEngine(config).evaluate(proposal)
+
+    assert decision.action == PolicyAction.BLOCK_AND_ALERT
+    assert decision.matched_policy == "block critical docs"
+
+
+def test_path_policy_matches_shell_command_target() -> None:
+    config = AgentLensConfig(
+        policies=[
+            PolicyRule(
+                name="block critical docs",
+                condition={"path_contains": ["README.md"]},
+                action=PolicyAction.BLOCK_AND_ALERT,
+            )
+        ]
+    )
+    proposal = ToolCallProposal(
+        session_id="ses_test",
+        tool_name="shell.run",
+        params={"command": "rm README.md"},
+    )
+
+    decision = PolicyEngine(config).evaluate(proposal)
+
+    assert decision.action == PolicyAction.BLOCK_AND_ALERT
+    assert decision.matched_policy == "block critical docs"

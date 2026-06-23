@@ -38,6 +38,7 @@ export type PolicyRule = {
   condition: Record<string, unknown>;
   action: "auto_execute" | "require_approval" | "block_and_alert";
   min_confidence: number | null;
+  _localId?: string;
 };
 
 export type PolicyConfigResponse = {

@@ -10,6 +10,25 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from agentlens.schemas import PolicyAction, RiskLevel, ToolCallProposal
 
+PATH_MATCH_KEYS = {
+    "path",
+    "paths",
+    "affected_files",
+    "affectedFiles",
+    "file",
+    "files",
+    "file_path",
+    "filePath",
+    "relativePath",
+    "target",
+    "targets",
+    "grant_root",
+    "grantRoot",
+    "command",
+    "cmd",
+    "query",
+}
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file="../.env", extra="ignore")
@@ -48,8 +67,9 @@ class PolicyRule(BaseModel):
             return False
 
         if "path_contains" in condition:
-            path = str(proposal.params.get("path", ""))
-            if not any(fragment in path for fragment in condition["path_contains"]):
+            fragments = [str(fragment).lower() for fragment in condition["path_contains"]]
+            targets = [value.lower() for value in _policy_target_strings(proposal)]
+            if not any(fragment in target for fragment in fragments for target in targets):
                 return False
 
         if "param_contains" in condition:
@@ -68,6 +88,54 @@ class PolicyRule(BaseModel):
                 return False
 
         return True
+
+
+def _policy_target_strings(proposal: ToolCallProposal) -> list[str]:
+    values: list[str] = []
+    _collect_matching_strings(proposal.params, PATH_MATCH_KEYS, values)
+    raw_request = proposal.provider_metadata.get("raw_request")
+    _collect_matching_strings(raw_request, PATH_MATCH_KEYS, values)
+    if proposal.stated_reason:
+        values.append(proposal.stated_reason)
+    return _unique_strings(values)
+
+
+def _collect_matching_strings(value: Any, keys: set[str], output: list[str]) -> None:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key in keys:
+                _collect_all_strings(item, output)
+            else:
+                _collect_matching_strings(item, keys, output)
+        return
+    if isinstance(value, list):
+        for item in value:
+            _collect_matching_strings(item, keys, output)
+
+
+def _collect_all_strings(value: Any, output: list[str]) -> None:
+    if isinstance(value, str) and value.strip():
+        output.append(value.strip())
+        return
+    if isinstance(value, dict):
+        for item in value.values():
+            _collect_all_strings(item, output)
+        return
+    if isinstance(value, list):
+        for item in value:
+            _collect_all_strings(item, output)
+
+
+def _unique_strings(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    unique: list[str] = []
+    for value in values:
+        normalized = " ".join(value.split())
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        unique.append(normalized)
+    return unique
 
 
 class AgentLensConfig(BaseModel):

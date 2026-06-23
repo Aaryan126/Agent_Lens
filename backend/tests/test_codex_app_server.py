@@ -64,6 +64,26 @@ def test_proposal_from_nested_command_approval_request() -> None:
     assert proposal.params["cwd"] == "/repo"
 
 
+def test_proposal_from_file_change_approval_preserves_changed_paths() -> None:
+    proposal = proposal_from_app_server_request(
+        method="item/fileChange/requestApproval",
+        session_id="ses_app",
+        params={
+            "itemId": "item_1",
+            "grantRoot": "/repo",
+            "changes": [
+                {"path": "/repo/README.md", "kind": "modify"},
+                {"filePath": "/repo/prd.md", "operation": "delete"},
+            ],
+            "reason": "Need to update docs.",
+        },
+    )
+
+    assert proposal.tool_name == "fs.write"
+    assert proposal.params["path"] == "/repo/README.md"
+    assert proposal.params["paths"] == ["/repo/README.md", "/repo/prd.md", "/repo"]
+
+
 def test_app_server_adapter_answers_approval_requests() -> None:
     transport = FakeTransport(
         [

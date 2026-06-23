@@ -11,6 +11,8 @@ import {
 } from "@tanstack/react-table";
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   Ban,
   BarChart3,
   Bell,
@@ -21,16 +23,21 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  Copy,
   Edit3,
   FileText,
   GitBranch,
   Info,
   Network,
+  Plus,
+  RefreshCw,
+  Save,
   Search,
   ShieldAlert,
   ShieldCheck,
   SlidersHorizontal,
   Terminal,
+  Trash2,
   XCircle,
 } from "lucide-react";
 import {
@@ -1094,6 +1101,8 @@ const secondaryPolicyButtonClass = `${policyButtonFeedback} h-9 border border-ne
 const savePolicyButtonClass = `${policyButtonFeedback} h-9 border border-emerald-300 bg-emerald-50 px-3 text-emerald-800 hover:border-emerald-500 hover:bg-emerald-100`;
 const secondarySmallButtonClass = `${policyButtonFeedback} h-8 border border-neutral-300 bg-white px-2.5 text-xs text-neutral-900 hover:border-neutral-950 hover:bg-neutral-50`;
 const dangerSmallButtonClass = `${policyButtonFeedback} h-8 border border-red-200 bg-red-50 px-2.5 text-xs text-red-700 hover:border-red-300 hover:bg-red-100`;
+const headerIconButtonClass = "inline-flex h-8 w-8 items-center justify-center rounded-md border border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400 hover:text-neutral-900 disabled:opacity-30 disabled:pointer-events-none transition shadow-sm hover:shadow active:scale-[0.98]";
+const headerDangerButtonClass = "inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-200 bg-red-50 text-red-600 hover:border-red-400 hover:bg-red-100 hover:text-red-700 disabled:opacity-30 disabled:pointer-events-none transition shadow-sm hover:shadow active:scale-[0.98]";
 
 function policyCompareKey(policies: PolicyRule[]) {
   return JSON.stringify(
@@ -1239,98 +1248,7 @@ export function PolicyLedgerView({ gates, apiUrl }: { gates: Gate[]; apiUrl: str
   return (
     <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
       <div className="min-w-0 space-y-5">
-        <Panel>
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <PanelTitle
-              eyebrow="Policy Management"
-              title="Standing Rules"
-              body="Edit ordered rules, test the draft against a sample action, then save back to agentlens.config.yaml."
-              icon={<SlidersHorizontal size={18} />}
-            />
-            {dirty ? (
-              <span className="inline-flex w-fit shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
-                Unsaved changes
-              </span>
-            ) : null}
-          </div>
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <button onClick={addPolicy} className={primaryPolicyButtonClass}>Create Policy</button>
-            <button onClick={() => void loadPolicies()} className={secondaryPolicyButtonClass}>Reload</button>
-            <button
-              onClick={() => void savePolicies()}
-              disabled={!dirty || saving || Boolean(policyError?.includes("Condition JSON"))}
-              className={savePolicyButtonClass}
-            >
-              {saving ? "Saving" : "Save To Config"}
-            </button>
-          </div>
-          {policyMessage ? <p className="mt-3 text-sm text-neutral-600">{policyMessage}</p> : null}
-          {policyError ? <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{policyError}</p> : null}
-          <div className="mt-5 space-y-3">
-            {draftPolicies.map((policy, index) => (
-              <article key={`${index}-${JSON.stringify(policy.condition)}`} className="overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50">
-                <div className="grid gap-3 border-b border-neutral-200 bg-white p-3 lg:grid-cols-[minmax(0,1fr)_160px_130px]">
-                  <label className="min-w-0 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
-                    Name
-                    <input
-                      value={policy.name}
-                      onChange={(event) => updatePolicy(index, { name: event.target.value })}
-                      className={policyInputClass}
-                    />
-                  </label>
-                  <label className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
-                    Action
-                    <select
-                      value={policy.action}
-                      onChange={(event) => updatePolicy(index, { action: event.target.value as PolicyRule["action"] })}
-                      className={policyInputClass}
-                    >
-                      {(config?.supported_actions ?? ["auto_execute", "require_approval", "block_and_alert"]).map((action) => (
-                        <option key={action} value={action}>{titleCase(action)}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
-                    Min Conf.
-                    <input
-                      value={policy.min_confidence ?? ""}
-                      placeholder="optional"
-                      onChange={(event) => updatePolicy(index, { min_confidence: event.target.value ? Number(event.target.value) : null })}
-                      className={policyInputClass}
-                    />
-                  </label>
-                </div>
-                <div className="grid gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_210px]">
-                  <label className="min-w-0 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
-                    Condition JSON
-                    <textarea
-                      defaultValue={JSON.stringify(policy.condition, null, 2)}
-                      onBlur={(event) => updateCondition(index, event.target.value)}
-                      className="mt-1 min-h-20 max-h-36 w-full resize-y rounded-md border border-neutral-300 bg-white p-3 font-mono text-xs normal-case tracking-normal outline-none transition focus:border-neutral-950"
-                    />
-                  </label>
-                  <div className="flex flex-wrap content-start gap-2 pt-5 lg:justify-end">
-                    <button onClick={() => movePolicy(index, -1)} className={secondarySmallButtonClass}>Move Up</button>
-                    <button onClick={() => movePolicy(index, 1)} className={secondarySmallButtonClass}>Move Down</button>
-                    <button
-                      onClick={() => setDraftPolicies((current) => [...current, { ...policy, name: `${policy.name} copy` }])}
-                      className={secondarySmallButtonClass}
-                    >
-                      Duplicate
-                    </button>
-                    <button
-                      onClick={() => setDraftPolicies((current) => current.filter((_, itemIndex) => itemIndex !== index))}
-                      className={dangerSmallButtonClass}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        </Panel>
-
+        {/* Runtime Matches Section (moved above Policy Management) */}
         <Panel>
           <PanelTitle
             eyebrow="Runtime Matches"
@@ -1374,6 +1292,150 @@ export function PolicyLedgerView({ gates, apiUrl }: { gates: Gate[]; apiUrl: str
             </div>
           </div>
         </Panel>
+
+        {/* Standing Rules (Policy Management) Section */}
+        <Panel>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <PanelTitle
+              eyebrow="Policy Management"
+              title="Standing Rules"
+              body="Edit ordered rules, test the draft against a sample action, then save back to agentlens.config.yaml."
+              icon={<SlidersHorizontal size={18} />}
+            />
+            {dirty ? (
+              <span className="inline-flex w-fit shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                Unsaved changes
+              </span>
+            ) : null}
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <button onClick={addPolicy} className={primaryPolicyButtonClass}>
+              <Plus size={15} className="mr-1.5" />
+              Create Policy
+            </button>
+            <button onClick={() => void loadPolicies()} className={secondaryPolicyButtonClass}>
+              <RefreshCw size={15} className="mr-1.5" />
+              Reload
+            </button>
+            <button
+              onClick={() => void savePolicies()}
+              disabled={!dirty || saving || Boolean(policyError?.includes("Condition JSON"))}
+              className={savePolicyButtonClass}
+            >
+              <Save size={15} className="mr-1.5" />
+              {saving ? "Saving" : "Save To Config"}
+            </button>
+          </div>
+          {policyMessage ? <p className="mt-3 text-sm text-neutral-600">{policyMessage}</p> : null}
+          {policyError ? <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{policyError}</p> : null}
+          <div className="mt-5 space-y-3">
+            {draftPolicies.map((policy, index) => (
+              <article
+                key={policy._localId || index}
+                className="animate-slide-down-fade-in overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm hover:shadow transition duration-200"
+              >
+                {/* Card Header */}
+                <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-4 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-neutral-200 text-xs font-bold text-neutral-700">
+                      {index + 1}
+                    </span>
+                    <span className="text-xs font-bold uppercase tracking-wider text-neutral-600">
+                      Policy Rule
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => movePolicy(index, -1)}
+                      disabled={index === 0}
+                      className={headerIconButtonClass}
+                      title="Move Up"
+                    >
+                      <ArrowUp size={14} />
+                    </button>
+                    <button
+                      onClick={() => movePolicy(index, 1)}
+                      disabled={index === draftPolicies.length - 1}
+                      className={headerIconButtonClass}
+                      title="Move Down"
+                    >
+                      <ArrowDown size={14} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setDraftPolicies((current) => {
+                          const copy = {
+                            ...policy,
+                            name: `${policy.name} Copy`,
+                            _localId: Math.random().toString(36).substring(2, 9),
+                          };
+                          const next = [...current];
+                          next.splice(index + 1, 0, copy);
+                          return next;
+                        });
+                      }}
+                      className={headerIconButtonClass}
+                      title="Duplicate"
+                    >
+                      <Copy size={14} />
+                    </button>
+                    <button
+                      onClick={() => setDraftPolicies((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                      className={headerDangerButtonClass}
+                      title="Delete"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Card Body */}
+                <div className="p-4 space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <label className="flex flex-col text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                      Name
+                      <input
+                        value={policy.name}
+                        onChange={(event) => updatePolicy(index, { name: event.target.value })}
+                        className={policyInputClass}
+                      />
+                    </label>
+                    <label className="flex flex-col text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                      Action
+                      <select
+                        value={policy.action}
+                        onChange={(event) => updatePolicy(index, { action: event.target.value as PolicyRule["action"] })}
+                        className={policyInputClass}
+                      >
+                        {(config?.supported_actions ?? ["auto_execute", "require_approval", "block_and_alert"]).map((action) => (
+                          <option key={action} value={action}>{titleCase(action)}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="flex flex-col text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                      Min Conf.
+                      <input
+                        value={policy.min_confidence ?? ""}
+                        placeholder="optional"
+                        onChange={(event) => updatePolicy(index, { min_confidence: event.target.value ? Number(event.target.value) : null })}
+                        className={policyInputClass}
+                      />
+                    </label>
+                  </div>
+
+                  <label className="block text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                    Condition JSON
+                    <textarea
+                      defaultValue={JSON.stringify(policy.condition, null, 2)}
+                      onBlur={(event) => updateCondition(index, event.target.value)}
+                      className="mt-1 min-h-[80px] max-h-36 w-full resize-y rounded-md border border-neutral-300 bg-white p-3 font-mono text-xs normal-case tracking-normal outline-none transition focus:border-neutral-950 focus:ring-2 focus:ring-neutral-950/10"
+                    />
+                  </label>
+                </div>
+              </article>
+            ))}
+          </div>
+        </Panel>
       </div>
 
       <aside className="min-w-0 xl:sticky xl:top-5 xl:self-start">
@@ -1412,11 +1474,34 @@ export function PolicyLedgerView({ gates, apiUrl }: { gates: Gate[]; apiUrl: str
             </div>
             <button onClick={() => void testDraftPolicies()} className={primaryPolicyButtonClass}>Test Draft Policies</button>
             {testResult ? (
-              <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Result</p>
-                <p className="mt-2 text-lg font-semibold">{titleCase(testResult.decision.action)}</p>
-                <p className="mt-1 text-sm text-neutral-600">{testResult.decision.matched_policy ?? "Semantic risk fallback"}</p>
-                <p className="mt-2 text-sm leading-6 text-neutral-700">{testResult.decision.reason}</p>
+              <div className={`rounded-lg border p-4 transition duration-200 animate-slide-down-fade-in ${
+                testResult.decision.action === "auto_execute"
+                  ? "border-emerald-200 bg-emerald-50/50 text-emerald-950"
+                  : testResult.decision.action === "require_approval"
+                  ? "border-amber-200 bg-amber-50/50 text-amber-950"
+                  : "border-red-200 bg-red-50/50 text-red-950"
+              }`}>
+                <div className="flex items-center gap-2">
+                  {testResult.decision.action === "auto_execute" ? (
+                    <ShieldCheck className="text-emerald-600" size={18} />
+                  ) : testResult.decision.action === "require_approval" ? (
+                    <AlertTriangle className="text-amber-600" size={18} />
+                  ) : (
+                    <Ban className="text-red-600" size={18} />
+                  )}
+                  <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                    Simulated Result
+                  </p>
+                </div>
+                <p className="mt-2 text-lg font-bold">
+                  {titleCase(testResult.decision.action)}
+                </p>
+                <p className="mt-1 text-sm font-semibold">
+                  {testResult.decision.matched_policy ?? "Semantic risk fallback"}
+                </p>
+                <p className="mt-2 text-xs leading-relaxed opacity-90">
+                  {testResult.decision.reason}
+                </p>
               </div>
             ) : null}
             {config ? (

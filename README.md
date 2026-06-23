@@ -5,7 +5,6 @@ AgentLens is a judgment layer for AI coding agents. It intercepts proposed tool 
 It is built with a Python/FastAPI backend, a Next.js/TypeScript frontend, Pydantic schemas, OpenAI intelligence calls, SQLite/PostgreSQL storage, and local Codex app-server integrations.
 
 The current build is local-first: Codex can run normally in the terminal while project-local hooks mirror proposed tool calls into a local AgentLens guard. The hosted demo path remains available for judging, Slack validation, and remote review.
-Guarded app-server mode (`agentlens-run`) is the strict local workflow because AgentLens owns Codex approval callbacks before tool execution continues.
 
 ## Current Architecture
 
@@ -128,8 +127,7 @@ uv run agentlens-dev --repo /path/to/your/repo
 
 This starts the local guard API, starts the Next.js ledger, starts the native Codex proxy,
 waits for each service to become ready, and then launches Codex connected to AgentLens.
-Use this as the fastest local workflow. Press `Ctrl+C` to stop Codex and the AgentLens
-child processes.
+Press `Ctrl+C` to stop Codex and the AgentLens child processes.
 
 If the local virtualenv has not refreshed the new console script yet, use the module
 fallback:

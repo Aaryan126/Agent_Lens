@@ -1,11 +1,12 @@
 policies:
-- name: auto-approve safe reads
+- name: block critical project docs changes
   condition:
-    tool_in:
-    - fs.read
-    - git.status
-    - run_tests
-  action: auto_execute
+    path_contains:
+    - README.md
+    - prd.md
+    - agentlens.config.yaml
+    - .env.example
+  action: block_and_alert
 - name: protect migrations and production
   condition:
     path_contains:
@@ -13,6 +14,13 @@ policies:
     - /prod
   action: require_approval
   min_confidence: 0.0
+- name: auto-approve safe reads
+  condition:
+    tool_in:
+    - fs.read
+    - git.status
+    - run_tests
+  action: auto_execute
 - name: block destructive database changes
   condition:
     tool_in:
@@ -26,9 +34,4 @@ policies:
   condition:
     confidence_below: 0.75
     risk_not: low
-  action: require_approval
-- name: require readme review
-  condition:
-    path_contains:
-    - README.md
   action: require_approval

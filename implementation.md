@@ -275,6 +275,34 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
   Validation passed: frontend `npm run build` passed, and a Playwright visual smoke
   confirmed the Policy Ledger had no page-level horizontal overflow at 1280, 1440,
   1920, and 2048px.
+- Polished the Policy Ledger UI to enhance professionalism, alignment, and animations:
+  - Swapped section order so that "Runtime Matches" (Session Policy Ledger) sits above "Standing Rules" (Policy Management) in the main flow.
+  - Refactored individual policy card actions (Move Up, Move Down, Duplicate, Delete) from staggered text buttons into a unified, single-line toolbar with icons (`ArrowUp`, `ArrowDown`, `Copy`, `Trash2`) in a clean header bar. This also allows the `Condition JSON` textarea to stretch full width.
+  - Added clean visual icons (`Plus`, `RefreshCw`, `Save`) to the top-level main buttons (Create Policy, Reload, Save to Config).
+  - Configured "Create Policy" to prepend new cards to the top of the deck instead of appending to the bottom.
+  - Implemented stable React key mappings via generated local IDs (`_localId`) and created a cubic-bezier slide-down-fade-in CSS animation class in `globals.css` to smoothly animate new/duplicated card entries.
+  - Upgraded the simulator results to render as color-coded alert blocks (green, amber, red) with matching status icons (`ShieldCheck`, `AlertTriangle`, `Ban`) based on the simulated decision.
+  Validation passed: frontend `npm run build` completed successfully.
+- Policy matching now handles real Codex app-server target shapes. `path_contains` checks
+  path lists, file keys, grant roots, command/query text, raw provider target fields, and
+  visible stated reason instead of only `params.path`. File-change approval requests now
+  preserve discovered changed paths in `params.paths`, so broad project-file policies such
+  as blocking README/PRD/config changes can match native Codex TUI proposals instead of
+  falling back to semantic risk. Validation passed:
+  `UV_CACHE_DIR=.uv-cache env -u AGENTLENS_DISABLE_HOOKS ./.venv/bin/pytest
+  tests/test_policy_risk.py tests/test_codex_app_server.py tests/test_session_api.py`
+  reported 33 passed with 1 existing Starlette/httpx warning, and targeted backend
+  `ruff check` passed.
+- Native proxy policy enforcement now carries recent target hints from the user prompt and
+  passive read/search telemetry into target-less file-change approval requests. This fixes
+  the case where a README policy matched earlier telemetry rows but the actual Codex native
+  approval fell back to semantic risk. Passive app-server telemetry is also always recorded
+  as observed/auto-executed, even if a block policy would match it, because those events
+  have already happened and cannot be used as control gates. Validation passed:
+  `UV_CACHE_DIR=.uv-cache env -u AGENTLENS_DISABLE_HOOKS ./.venv/bin/pytest
+  tests/test_codex_proxy.py tests/test_policy_risk.py tests/test_codex_app_server.py
+  tests/test_session_api.py` reported 52 passed with 1 existing Starlette/httpx warning,
+  and targeted backend `ruff check` passed.
 
 ## Known Gaps
 

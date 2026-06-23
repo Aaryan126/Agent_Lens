@@ -73,7 +73,9 @@ class AgentLensSession:
             card = self.intelligence.build_card(context)
 
         status = GateStatus.PENDING
-        if policy.action == PolicyAction.AUTO_EXECUTE:
+        if self._is_passive_observation(proposal):
+            status = GateStatus.AUTO_EXECUTED
+        elif policy.action == PolicyAction.AUTO_EXECUTE:
             status = GateStatus.AUTO_EXECUTED
         elif policy.action == PolicyAction.BLOCK_AND_ALERT:
             status = GateStatus.BLOCKED
@@ -228,4 +230,8 @@ class AgentLensSession:
         return (
             proposal.provider_metadata.get("fast_intelligence") is True
             or proposal.provider_metadata.get("source") == "codex_hook"
+            or self._is_passive_observation(proposal)
         )
+
+    def _is_passive_observation(self, proposal: ToolCallProposal) -> bool:
+        return proposal.provider_metadata.get("passive") is True

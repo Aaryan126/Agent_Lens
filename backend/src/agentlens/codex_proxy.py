@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import re
 import subprocess
 import sys
 import time
@@ -29,6 +30,7 @@ APPROVAL_METHODS = {
     "item/fileChange/requestApproval",
     "item/permissions/requestApproval",
 }
+TARGET_HINT_RE = re.compile(r"(?<![\w./-])[\w./-]+\.[A-Za-z0-9_.-]+(?![\w./-])")
 
 
 @dataclass(frozen=True)
@@ -55,6 +57,7 @@ class AgentLensProxyState:
         self.latest_prompt = "Codex remote TUI session"
         self.pending_native_approvals: dict[int, PendingNativeApproval] = {}
         self.passive_event_signatures: set[str] = set()
+        self.recent_target_hints: list[str] = []
 
     async def observe_client_message(self, message: dict[str, Any]) -> None:
         method = str(message.get("method") or "")
@@ -63,12 +66,14 @@ class AgentLensProxyState:
             self.latest_prompt = "Codex remote TUI session"
             self.pending_native_approvals.clear()
             self.passive_event_signatures.clear()
+            self.recent_target_hints.clear()
             return
         if method != "turn/start":
             return
         params = message.get("params") if isinstance(message.get("params"), dict) else {}
         prompt = _extract_prompt(params) or "Codex remote TUI turn"
         self.latest_prompt = prompt
+        self._remember_target_hints(_target_hints_from_text(prompt))
         if self.session_id is None:
             self.session_id = await self._create_session(prompt)
             session_label = "AgentLens session"
@@ -90,6 +95,7 @@ class AgentLensProxyState:
             params=message.get("params") if isinstance(message.get("params"), dict) else {},
             session_id=session_id,
         )
+        proposal = self._with_recent_target_hints(proposal)
         gate = await self._post_proposal(proposal)
         status = str(gate.get("status") or "")
         gate_id = str(gate.get("id") or "")
@@ -216,6 +222,7 @@ class AgentLensProxyState:
         )
         if proposal is None:
             return
+        self._remember_target_hints(_proposal_target_hints(proposal))
         signature = _passive_event_signature(proposal)
         if signature in self.passive_event_signatures:
             return
@@ -224,12 +231,44 @@ class AgentLensProxyState:
             self.passive_event_signatures = set(list(self.passive_event_signatures)[-100:])
         try:
             gate = await self._post_proposal(proposal)
-            if str(gate.get("status") or "") == "pending":
+            if str(gate.get("status") or "") in {"pending", "blocked"}:
                 gate_id = str(gate.get("id") or "")
                 if gate_id:
                     await self._mark_passive_observed(gate_id)
         except httpx.HTTPError:
             return
+
+    def _remember_target_hints(self, hints: list[str]) -> None:
+        if not hints:
+            return
+        self.recent_target_hints = _unique_strings([*self.recent_target_hints, *hints])[-12:]
+
+    def _with_recent_target_hints(self, proposal: ToolCallProposal) -> ToolCallProposal:
+        if proposal.tool_name not in {"fs.write", "fs.delete"}:
+            return proposal
+        if _proposal_has_concrete_target(proposal, self.repo):
+            self._remember_target_hints(_proposal_target_hints(proposal))
+            return proposal
+        hints = self.recent_target_hints[-6:]
+        if not hints:
+            return proposal
+        params = dict(proposal.params)
+        existing_paths = params.get("paths")
+        if isinstance(existing_paths, list):
+            paths = [
+                str(path)
+                for path in existing_paths
+                if str(path).strip() and not _is_repo_root_target(str(path), self.repo)
+            ]
+        else:
+            paths = []
+        paths = _unique_strings([*hints, *paths])
+        if not paths:
+            return proposal
+        params["paths"] = paths
+        params["path"] = paths[0]
+        params["target_hints"] = hints
+        return proposal.model_copy(update={"params": params})
 
     async def _resolve_gate(self, *, gate_id: str, action: str, reason: str) -> None:
         async with httpx.AsyncClient(timeout=30) as client:
@@ -585,6 +624,119 @@ def _passive_event_signature(proposal: ToolCallProposal) -> str:
         or proposal.id
     )
     return f"{method}:{proposal.tool_name}:{target}"
+
+
+def _target_hints_from_text(value: str) -> list[str]:
+    hints = []
+    for match in TARGET_HINT_RE.findall(value):
+        cleaned = match.strip().strip("`'\".,:;()[]{}<>")
+        if cleaned:
+            hints.append(cleaned)
+    return _unique_strings(hints)
+
+
+def _proposal_target_hints(proposal: ToolCallProposal) -> list[str]:
+    params = proposal.params
+    values: list[str] = []
+    paths = params.get("paths")
+    if isinstance(paths, list):
+        values.extend(str(path) for path in paths if str(path).strip())
+    for key in ("path", "file", "target", "command", "cmd", "query"):
+        value = params.get(key)
+        if isinstance(value, str):
+            values.append(value)
+    metadata = proposal.provider_metadata
+    values.extend(_collect_target_strings(metadata.get("raw_request")))
+    values.extend(_collect_target_strings(metadata.get("raw_event")))
+    values.extend(_target_hints_from_text(proposal.stated_reason or ""))
+    hints: list[str] = []
+    for value in values:
+        hints.extend(_target_hints_from_text(str(value)))
+    return _unique_strings(hints)
+
+
+def _proposal_has_concrete_target(proposal: ToolCallProposal, repo: str) -> bool:
+    params = proposal.params
+    candidates: list[str] = []
+    paths = params.get("paths")
+    if isinstance(paths, list):
+        candidates.extend(str(path) for path in paths if str(path).strip())
+    for key in ("path", "file", "target"):
+        value = params.get(key)
+        if isinstance(value, str) and value.strip():
+            candidates.append(value)
+    repo_path = Path(repo).expanduser().resolve()
+    for candidate in candidates:
+        text = candidate.strip()
+        if not text or text == "external state":
+            continue
+        try:
+            if _is_repo_root_target(text, repo):
+                continue
+        except OSError:
+            pass
+        if text in {".", str(repo_path)}:
+            continue
+        return True
+    return False
+
+
+def _is_repo_root_target(value: str, repo: str) -> bool:
+    text = value.strip()
+    if text in {".", "external state"}:
+        return text == "."
+    path = Path(text).expanduser()
+    if not path.is_absolute():
+        return False
+    try:
+        return path.resolve() == Path(repo).expanduser().resolve()
+    except OSError:
+        return False
+
+
+def _collect_target_strings(value: Any) -> list[str]:
+    if isinstance(value, dict):
+        strings = []
+        for key, item in value.items():
+            if key in {"path", "paths", "file", "files", "filePath", "file_path", "target"}:
+                strings.extend(_collect_all_strings(item))
+            else:
+                strings.extend(_collect_target_strings(item))
+        return strings
+    if isinstance(value, list):
+        strings = []
+        for item in value:
+            strings.extend(_collect_target_strings(item))
+        return strings
+    return []
+
+
+def _collect_all_strings(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        strings = []
+        for item in value.values():
+            strings.extend(_collect_all_strings(item))
+        return strings
+    if isinstance(value, list):
+        strings = []
+        for item in value:
+            strings.extend(_collect_all_strings(item))
+        return strings
+    return []
+
+
+def _unique_strings(values: list[str]) -> list[str]:
+    seen = set()
+    unique = []
+    for value in values:
+        text = str(value).strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        unique.append(text)
+    return unique
 
 
 def _find_provider_value(value: Any, keys: set[str]) -> str | None:

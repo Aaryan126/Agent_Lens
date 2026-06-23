@@ -284,6 +284,91 @@ def test_proxy_remote_command_includes_explicit_policy_and_sandbox() -> None:
 
 
 @pytest.mark.asyncio
+async def test_proxy_uses_prompt_target_hint_for_file_change_approval_without_paths(
+    fake_async_client,
+) -> None:
+    fake_async_client.responses.extend(
+        [
+            {"id": "ses_proxy"},
+            {
+                "id": "gate_blocked",
+                "status": "blocked",
+                "intelligence_card": {"summary": "Blocked by docs policy."},
+            },
+        ]
+    )
+    state = AgentLensProxyState(
+        api_url="http://agentlens.test",
+        repo="/repo",
+        dashboard_url="http://localhost:3000",
+    )
+    await state.observe_client_message(
+        {
+            "method": "turn/start",
+            "params": {
+                "input": [
+                    {
+                        "type": "text",
+                        "text": "Delete one sentence from README.md.",
+                    }
+                ]
+            },
+        }
+    )
+
+    target, outbound = await state.handle_upstream_message(
+        {
+            "id": 9,
+            "method": "item/fileChange/requestApproval",
+            "params": {"itemId": "item_1", "grantRoot": "/repo"},
+        }
+    )
+
+    assert target == "upstream"
+    assert outbound == {"id": 9, "result": {"decision": "cancel"}}
+    tool_call_posts = [
+        request for request in fake_async_client.requests if request[1].endswith("/tool-calls")
+    ]
+    assert tool_call_posts[0][2]["tool_name"] == "fs.write"
+    assert tool_call_posts[0][2]["params"]["path"] == "README.md"
+    assert tool_call_posts[0][2]["params"]["paths"] == ["README.md"]
+
+
+@pytest.mark.asyncio
+async def test_proxy_marks_blocked_passive_events_observed(fake_async_client) -> None:
+    fake_async_client.responses.extend(
+        [
+            {"id": "gate_passive_block", "status": "blocked"},
+            {"id": "gate_passive_block", "status": "auto_executed"},
+        ]
+    )
+    state = AgentLensProxyState(
+        api_url="http://agentlens.test",
+        repo="/repo",
+        dashboard_url="http://localhost:3000",
+    )
+    state.session_id = "ses_proxy"
+
+    await state.handle_upstream_message(
+        {
+            "method": "item/started",
+            "params": {
+                "item": {
+                    "id": "item_1",
+                    "type": "commandExecution",
+                    "command": "sed -n '1,80p' README.md",
+                    "cwd": "/repo",
+                }
+            },
+        }
+    )
+
+    observe_posts = [request for request in fake_async_client.requests if request[1].endswith("/observe")]
+    assert len(observe_posts) == 1
+    assert observe_posts[0][1] == "http://agentlens.test/gates/gate_passive_block/observe"
+
+
+@pytest.mark.asyncio
 async def test_client_to_upstream_forwards_turn_start_with_proxy_policy() -> None:
     class FakeClient:
         def __init__(self, messages):

@@ -85,7 +85,7 @@ class CodexRunPayload(BaseModel):
 
 SUPPORTED_POLICY_CONDITIONS = {
     "tool_in": "Match when the proposal tool name is in this list.",
-    "path_contains": "Match when the proposal path contains any listed fragment.",
+    "path_contains": "Match when proposal path, path list, command, query, or raw provider target contains any listed fragment.",
     "param_contains": "Match when a named proposal param contains any listed fragment.",
     "confidence_below": "Match when provider confidence is below this number.",
     "risk_not": "Match when semantic risk is not the selected risk level.",

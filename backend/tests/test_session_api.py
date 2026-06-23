@@ -77,6 +77,49 @@ def test_hook_originated_pending_gate_uses_fast_card(tmp_path: Path, monkeypatch
     assert "Fast hook mirror mode" in gate.intelligence_card.trajectory_preview
 
 
+def test_passive_observation_does_not_create_actionable_block_gate(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    (tmp_path / "agentlens.config.yaml").write_text(
+        "\n".join(
+            [
+                "policies:",
+                "  - name: block readme telemetry",
+                "    condition:",
+                "      path_contains:",
+                "        - README.md",
+                "    action: block_and_alert",
+            ]
+        )
+    )
+
+    def fail_build_card(self, context):
+        raise AssertionError("passive telemetry must not run full OpenAI card generation")
+
+    monkeypatch.setattr("agentlens.intelligence.IntelligenceLayer.build_card", fail_build_card)
+    storage = InMemoryStore()
+    session = AgentLensSession.start(
+        SessionStart(original_instruction="Observe Codex activity.", repo_path=str(tmp_path)),
+        storage=storage,
+    )
+
+    gate = session.propose(
+        ToolCallProposal(
+            session_id=session.session.id,
+            tool_name="shell.run",
+            params={"command": "sed -n '1,40p' README.md"},
+            provider_metadata={"source": "codex_app_server", "passive": True},
+        )
+    )
+
+    assert gate.policy_decision.action == "block_and_alert"
+    assert gate.status == "auto_executed"
+    assert gate.intelligence_card is not None
+    assert gate.intelligence_card.model_roles == {"summary": "deterministic_fast_hook"}
+
+
 def test_health_endpoint() -> None:
     client = TestClient(app)
     response = client.get("/health")

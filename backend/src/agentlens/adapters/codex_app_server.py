@@ -285,12 +285,31 @@ def proposal_from_app_server_request(
         )
 
     if method == "item/fileChange/requestApproval":
+        paths = _find_all_strings(
+            params,
+            {
+                "path",
+                "paths",
+                "file",
+                "files",
+                "filePath",
+                "file_path",
+                "relativePath",
+                "target",
+                "targets",
+            },
+        )
+        grant_root = _find_first_string(params, {"grantRoot", "grant_root"})
+        if grant_root:
+            paths.append(grant_root)
+        paths = _unique_strings(paths)
         return ToolCallProposal(
             session_id=session_id,
             tool_name="fs.write",
             params={
-                "path": params.get("grantRoot") or "external state",
-                "grant_root": params.get("grantRoot"),
+                "path": paths[0] if paths else "external state",
+                "paths": paths,
+                "grant_root": grant_root,
                 "item_id": params.get("itemId"),
             },
             stated_reason=params.get("reason") or "Codex requested approval to change files.",
@@ -458,6 +477,50 @@ def _find_first_string(value: Any, keys: set[str]) -> str | None:
             if found:
                 return found
     return None
+
+
+def _find_all_strings(value: Any, keys: set[str]) -> list[str]:
+    found: list[str] = []
+    _collect_matching_strings(value, keys, found)
+    return found
+
+
+def _collect_matching_strings(value: Any, keys: set[str], output: list[str]) -> None:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key in keys:
+                _collect_all_strings(item, output)
+            else:
+                _collect_matching_strings(item, keys, output)
+        return
+    if isinstance(value, list):
+        for item in value:
+            _collect_matching_strings(item, keys, output)
+
+
+def _collect_all_strings(value: Any, output: list[str]) -> None:
+    if isinstance(value, str) and value.strip():
+        output.append(value.strip())
+        return
+    if isinstance(value, dict):
+        for item in value.values():
+            _collect_all_strings(item, output)
+        return
+    if isinstance(value, list):
+        for item in value:
+            _collect_all_strings(item, output)
+
+
+def _unique_strings(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    unique: list[str] = []
+    for value in values:
+        normalized = " ".join(value.split())
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        unique.append(normalized)
+    return unique
 
 
 def _item_type(item: dict[str, Any]) -> str | None:
