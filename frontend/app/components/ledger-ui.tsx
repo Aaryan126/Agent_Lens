@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   type ColumnDef,
   flexRender,
@@ -11,12 +11,17 @@ import {
 } from "@tanstack/react-table";
 import {
   AlertTriangle,
+  Ban,
   BarChart3,
   Bell,
   Blocks,
+  Check,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
+  Edit3,
   FileText,
   GitBranch,
   Info,
@@ -142,41 +147,81 @@ export function AppShell({
   onSendSlack: () => void;
   children: ReactNode;
 }) {
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("agentlens-sidebar-collapsed");
+      if (saved) setCollapsed(saved === "true");
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("agentlens-sidebar-collapsed", String(collapsed));
+    } catch {}
+  }, [collapsed]);
+
   return (
     <main className="min-h-screen bg-[#f4f4f1] text-neutral-950">
-      <div className="grid min-h-screen lg:grid-cols-[276px_minmax(0,1fr)]">
-        <aside className="hidden border-r border-neutral-800 bg-neutral-950 text-white lg:flex lg:flex-col">
-          <div className="border-b border-neutral-800 px-6 py-5">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-md border border-neutral-700 bg-neutral-900">
-                <ShieldCheck size={18} />
+      <div
+        className={`grid min-h-screen transition-all duration-200 ${
+          collapsed ? "lg:grid-cols-[72px_minmax(0,1fr)]" : "lg:grid-cols-[276px_minmax(0,1fr)]"
+        }`}
+      >
+        <aside className="sticky top-0 hidden h-screen flex-col border-r border-neutral-800 bg-neutral-950 text-white lg:flex">
+          <div
+            className={`flex items-center justify-between border-b border-neutral-800 ${
+              collapsed ? "px-1.5 py-5" : "px-6 py-5"
+            }`}
+          >
+            <div className={`flex items-center ${collapsed ? "gap-1" : "gap-3"}`}>
+              <div className={`flex shrink-0 items-center justify-center rounded-md border border-neutral-700 bg-neutral-900 ${collapsed ? "h-8 w-8" : "h-9 w-9"}`}>
+                <ShieldCheck size={collapsed ? 16 : 18} />
               </div>
-              <div>
-                <p className="text-lg font-semibold leading-none">AgentLens</p>
-                <p className="mt-2 text-xs uppercase tracking-wide text-neutral-500">Session Ledger</p>
-              </div>
+              {!collapsed ? (
+                <div>
+                  <p className="text-lg font-semibold leading-none">AgentLens</p>
+                  <p className="mt-2 text-xs uppercase tracking-wide text-neutral-500">Session Ledger</p>
+                </div>
+              ) : null}
             </div>
+            <button
+              onClick={() => setCollapsed(!collapsed)}
+              className={`flex items-center justify-center rounded-md text-neutral-400 transition hover:bg-neutral-900 hover:text-white ${
+                collapsed ? "h-7 w-7" : "h-8 w-8"
+              }`}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+            </button>
           </div>
-          <nav className="flex flex-1 flex-col gap-1 px-3 py-4 text-sm">
+          <nav
+            className={`flex flex-1 flex-col gap-1 overflow-y-auto py-4 text-sm ${
+              collapsed ? "px-2" : "px-3"
+            }`}
+          >
             {navItems.map((item) => (
               <button
                 key={item.id}
                 onClick={() => onView(item.id)}
-                className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-left transition ${
+                className={`flex items-center gap-3 rounded-md py-2.5 text-left transition ${
+                  collapsed ? "w-full justify-center px-2" : "px-3"
+                } ${
                   activeView === item.id
                     ? "bg-white text-neutral-950"
                     : "text-neutral-400 hover:bg-neutral-900 hover:text-white"
                 }`}
+                title={collapsed ? item.label : undefined}
               >
                 {item.icon}
-                <span>{item.label}</span>
+                {!collapsed ? <span>{item.label}</span> : null}
               </button>
             ))}
           </nav>
-          <div className="border-t border-neutral-800 p-4">
-            <StatusLine label="Backend" value={healthLabel(health)} ok={health === "online"} />
-            <StatusLine label="Primary Surface" value="Codex Native TUI" ok />
-            <StatusLine label="Ambient Surface" value="Slack Ready" ok />
+          <div className={`border-t border-neutral-800 ${collapsed ? "p-3" : "p-4"}`}>
+            <StatusLine label="Backend" value={healthLabel(health)} ok={health === "online"} collapsed={collapsed} />
+            <StatusLine label="Primary Surface" value="Codex Native TUI" ok collapsed={collapsed} />
+            <StatusLine label="Ambient Surface" value="Slack Ready" ok collapsed={collapsed} />
           </div>
         </aside>
 
@@ -240,7 +285,7 @@ export function AppShell({
             </div>
           </header>
 
-          <div className="mx-auto flex max-w-[1720px] flex-col gap-4 px-5 py-5 xl:px-8">
+          <div className="mx-auto flex max-w-[1720px] flex-col gap-5 px-5 py-5 xl:px-8">
             {children}
           </div>
         </section>
@@ -287,8 +332,8 @@ export function ReviewLedger({
   onExplain: (gate: Gate) => Promise<void>;
 }) {
   return (
-    <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_440px]">
-      <div className="flex min-w-0 flex-col gap-4">
+    <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_480px]">
+      <div className="flex min-w-0 flex-col gap-5">
         <SectionHeader
           eyebrow="Session Ledger"
           title="Decision Queue"
@@ -308,10 +353,7 @@ export function ReviewLedger({
             onSelectGate={onSelectGate}
           />
         )}
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <TimelineLedger traces={traces} gates={gates} />
-          <LedgerAnalyticsPanel analytics={analytics} trustScore={trustScore} />
-        </div>
+        <TimelineAnalyticsTabs traces={traces} gates={gates} analytics={analytics} trustScore={trustScore} />
       </div>
 
       <GateInspector
@@ -341,12 +383,36 @@ export function GateTable({
   onSelectGate: (id: string) => void;
 }) {
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [filterText, setFilterText] = useState("");
+
   const inspectionGates = gates.filter((gate) =>
     isInspectionGate(gate, traceByProposal.get(gate.proposal_id)),
   );
+
+  const filteredGates = useMemo(() => {
+    if (!filterText.trim()) return gates;
+    const query = filterText.toLowerCase();
+    return gates.filter((gate) => {
+      const trace = traceByProposal.get(gate.proposal_id);
+      const actionLabel = toolLabel(trace?.tool_name).toLowerCase();
+      const targetLabel = gateTarget(gate, trace).toLowerCase();
+      const summaryLabel = (gate.intelligence_card?.summary ?? trace?.stated_reason ?? "").toLowerCase();
+      const policyLabel = (gate.policy_decision.matched_policy ?? "Semantic Risk").toLowerCase();
+      const statusLabel = gate.status.toLowerCase();
+
+      return (
+        actionLabel.includes(query) ||
+        targetLabel.includes(query) ||
+        summaryLabel.includes(query) ||
+        policyLabel.includes(query) ||
+        statusLabel.includes(query)
+      );
+    });
+  }, [gates, filterText, traceByProposal]);
+
   const rows = useMemo<GateRow[]>(
     () =>
-      gates
+      filteredGates
         .filter((gate) => !isInspectionGate(gate, traceByProposal.get(gate.proposal_id)))
         .map((gate) => {
           const trace = traceByProposal.get(gate.proposal_id);
@@ -363,8 +429,20 @@ export function GateTable({
           };
         })
         .sort((a, b) => Number(b.status === "pending") - Number(a.status === "pending")),
-    [gates, traceByProposal],
+    [filteredGates, traceByProposal],
   );
+
+  const showInspectionBatch = useMemo(() => {
+    if (inspectionGates.length === 0) return false;
+    if (!filterText.trim()) return true;
+    const query = filterText.toLowerCase();
+    return (
+      "auto-executed inspection batch".includes(query) ||
+      "collapsed".includes(query) ||
+      "inspection".includes(query)
+    );
+  }, [inspectionGates, filterText]);
+
   const columns = useMemo<ColumnDef<GateRow>[]>(
     () => [
       {
@@ -419,20 +497,38 @@ export function GateTable({
 
   return (
     <section className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-200 px-5 py-4 bg-white rounded-t-lg">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Gate Queue</p>
-          <p className="mt-1 text-sm text-neutral-600">Pending decisions stay visible until resolved.</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Gate Queue</p>
+          <p className="mt-0.5 text-sm text-neutral-500">Pending decisions stay visible until resolved.</p>
         </div>
-        <Search className="text-neutral-400" size={18} />
+        <div className="relative w-full sm:w-64">
+          <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-neutral-400">
+            <Search size={16} />
+          </span>
+          <input
+            type="text"
+            placeholder="Search decisions..."
+            value={filterText}
+            onChange={(e) => setFilterText(e.target.value)}
+            className="w-full h-9 pl-9 pr-4 rounded-md border border-neutral-300 bg-neutral-50 text-sm font-medium text-neutral-900 placeholder-neutral-400 outline-none focus:border-neutral-950 focus:bg-white transition"
+          />
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[920px] border-collapse text-left">
-          <thead className="bg-neutral-50 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+          <colgroup>
+            <col className="w-[120px]" />
+            <col className="min-w-0" />
+            <col className="w-[150px]" />
+            <col className="w-[130px]" />
+            <col className="w-[110px]" />
+          </colgroup>
+          <thead className="bg-neutral-50 text-xs font-semibold uppercase tracking-wide text-neutral-500 border-b border-neutral-200">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <th key={header.id} className="border-b border-neutral-200 px-4 py-3">
+                  <th key={header.id} className="px-4 py-3 text-left">
                     {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                   </th>
                 ))}
@@ -440,38 +536,53 @@ export function GateTable({
             ))}
           </thead>
           <tbody>
-            {inspectionGates.length > 0 ? (
-              <tr>
-                <td className="border-b border-neutral-100 px-4 py-4" colSpan={5}>
-                  <div className="grid gap-3 md:grid-cols-[130px_minmax(0,1fr)_140px_120px] md:items-center">
-                    <RiskCell risk="low" />
-                    <div>
-                      <p className="text-sm font-semibold">Auto-Executed Inspection Batch</p>
-                      <p className="mt-1 text-xs text-neutral-500">
-                        {inspectionGates.length} read-only shell/file inspection calls collapsed.
-                      </p>
-                    </div>
-                    <StatusBadge status="auto_executed" />
-                    <span className="text-sm font-semibold">Low</span>
+            {showInspectionBatch ? (
+              <tr className="border-b border-neutral-100 bg-neutral-50/40">
+                <td className="px-4 py-4 align-middle">
+                  <RiskCell risk="low" />
+                </td>
+                <td className="px-4 py-4 align-middle min-w-0">
+                  <div>
+                    <p className="text-sm font-semibold text-neutral-900">Auto-Executed Inspection Batch</p>
+                    <p className="mt-1 text-xs text-neutral-500">
+                      {inspectionGates.length} read-only shell/file inspection calls collapsed.
+                    </p>
                   </div>
+                </td>
+                <td className="px-4 py-4 align-middle">
+                  <span className="text-sm text-neutral-500">-</span>
+                </td>
+                <td className="px-4 py-4 align-middle">
+                  <StatusBadge status="auto_executed" />
+                </td>
+                <td className="px-4 py-4 align-middle">
+                  <span className="text-sm font-semibold text-neutral-700">Low</span>
                 </td>
               </tr>
             ) : null}
-            {table.getRowModel().rows.map((row) => (
-              <tr
-                key={row.id}
-                onClick={() => onSelectGate(row.original.id)}
-                className={`cursor-pointer border-b border-neutral-100 transition last:border-b-0 hover:bg-neutral-50 ${
-                  selectedGate?.id === row.original.id ? "bg-sky-50/70 shadow-[inset_3px_0_0_#0ea5e9]" : ""
-                }`}
-              >
-                {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="px-4 py-4 align-middle">
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
-                ))}
+            {table.getRowModel().rows.length === 0 && !showInspectionBatch ? (
+              <tr>
+                <td colSpan={5} className="px-4 py-8 text-center text-sm text-neutral-500">
+                  No records match search criteria.
+                </td>
               </tr>
-            ))}
+            ) : (
+              table.getRowModel().rows.map((row) => (
+                <tr
+                  key={row.id}
+                  onClick={() => onSelectGate(row.original.id)}
+                  className={`cursor-pointer border-b border-neutral-100 transition last:border-b-0 hover:bg-neutral-50 ${
+                    selectedGate?.id === row.original.id ? "bg-sky-50/70 shadow-[inset_3px_0_0_#0ea5e9]" : ""
+                  }`}
+                >
+                  {row.getVisibleCells().map((cell) => (
+                    <td key={cell.id} className="px-4 py-4 align-middle">
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -502,25 +613,41 @@ export function GateInspector({
 }) {
   if (!gate) {
     return (
-      <aside className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
-        <PanelTitle eyebrow="Inspector" title="No Gate Selected" icon={<Info size={18} />} />
-        <p className="mt-4 text-sm leading-6 text-neutral-600">
-          Select a gate to inspect risk, trajectory, drift, policy, dependencies, and decision history.
-        </p>
-        <div className="mt-6 grid gap-2">
-          <Fact label="Review Surface" value="Codex Native + Slack" />
-          <Fact label="Ledger Mode" value="Pinned Sessions" />
-          <Fact label="Strict Path" value="App-Server Proxy" />
+      <aside className="flex flex-col justify-between rounded-xl border border-neutral-200 bg-white p-6 shadow-sm min-h-[400px]">
+        <div className="flex flex-col items-center justify-center flex-1 py-8 text-center">
+          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-neutral-50 border border-neutral-200 text-neutral-400">
+            <ShieldCheck size={22} />
+          </div>
+          <h3 className="text-base font-bold text-neutral-900 tracking-tight">Active Inspector</h3>
+          <p className="mt-2 max-w-xs text-xs text-neutral-500 leading-relaxed">
+            Select any proposal gate from the queue on the left to analyze trajectory, audit intelligence, and verify policies.
+          </p>
+        </div>
+        <div className="border-t border-neutral-100 pt-5 space-y-2.5">
+          <div className="flex items-center justify-between text-xs py-1.5 border-b border-neutral-50">
+            <span className="font-semibold text-neutral-400 uppercase tracking-wider">Review Surface</span>
+            <span className="font-bold text-neutral-800">Codex Native + Slack</span>
+          </div>
+          <div className="flex items-center justify-between text-xs py-1.5 border-b border-neutral-50">
+            <span className="font-semibold text-neutral-400 uppercase tracking-wider">Ledger Mode</span>
+            <span className="font-bold text-neutral-800">Pinned Sessions</span>
+          </div>
+          <div className="flex items-center justify-between text-xs py-1.5">
+            <span className="font-semibold text-neutral-400 uppercase tracking-wider">Strict Path</span>
+            <span className="font-bold text-neutral-800 text-right">App-Server Proxy</span>
+          </div>
         </div>
       </aside>
     );
   }
 
+  const [tab, setTab] = useState<InspectorTab>("summary");
   const card = gate.intelligence_card;
   const canDecide = gate.status === "pending";
+
   return (
-    <aside className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm xl:sticky xl:top-5 xl:self-start">
-      <div className="flex items-start justify-between gap-4">
+    <aside className="sticky top-5 flex max-h-[calc(100vh-1.5rem)] flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
+      <div className="flex items-start justify-between gap-4 border-b border-neutral-200 p-5 pb-4">
         <PanelTitle
           eyebrow="Inspector"
           title={toolLabel(trace?.tool_name)}
@@ -530,103 +657,139 @@ export function GateInspector({
         <StatusBadge status={gate.status} />
       </div>
 
-      <div className="mt-5 grid grid-cols-3 gap-2">
-        <Fact label="Risk" value={titleCase(gate.risk_assessment.risk_level)} />
-        <Fact label="Blast" value={titleCase(gate.risk_assessment.blast_radius)} />
-        <Fact label="Confidence" value={formatPercent(card?.confidence)} />
+      <div className="flex gap-1 border-b border-neutral-100 px-5 pt-3 bg-neutral-50/30">
+        {inspectorTabs.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => setTab(item.id)}
+            className={`border-b-2 px-3 pb-2.5 text-xs font-bold uppercase tracking-wider transition outline-none ${
+              tab === item.id
+                ? "border-neutral-900 text-neutral-900"
+                : "border-transparent text-neutral-400 hover:text-neutral-700"
+            }`}
+          >
+            {item.label}
+          </button>
+        ))}
       </div>
 
-      <Section title="Recommendation">
-        <p>{card?.summary ?? "No intelligence summary available."}</p>
-      </Section>
-
-      <Section title="Policy Match">
-        <div className="grid gap-2">
-          <Fact label="Decision" value={titleCase(gate.policy_decision.action)} />
-          <Fact label="Matched Policy" value={gate.policy_decision.matched_policy ?? "Semantic Risk"} />
-          <p className="text-sm leading-6 text-neutral-600">{gate.policy_decision.reason}</p>
-        </div>
-      </Section>
-
-      <Section title="Trajectory">
-        <p>{card?.trajectory_preview ?? "No trajectory preview available."}</p>
-        {card?.full_trajectory?.next_steps?.length ? (
-          <ol className="mt-3 flex flex-col gap-2">
-            {card.full_trajectory.next_steps.map((step) => (
-              <li key={`${step.step}-${step.action}`} className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
-                  Step {step.step}
-                </span>
-                <p className="mt-1 text-sm font-semibold text-neutral-950">{step.action}</p>
-                <p className="mt-1 text-xs leading-5 text-neutral-600">{step.rationale}</p>
-              </li>
-            ))}
-          </ol>
+      <div className="flex-1 overflow-y-auto px-5 py-4">
+        {tab === "summary" ? (
+          <>
+            <div className="grid grid-cols-3 gap-2">
+              <Fact label="Risk" value={titleCase(gate.risk_assessment.risk_level)} />
+              <Fact label="Blast" value={titleCase(gate.risk_assessment.blast_radius)} />
+              <Fact label="Confidence" value={formatPercent(card?.confidence)} />
+            </div>
+            <Section title="Recommendation">
+              <p>{card?.summary ?? "No intelligence summary available."}</p>
+            </Section>
+            <Section title="Policy Match">
+              <div className="grid gap-2">
+                <Fact label="Decision" value={titleCase(gate.policy_decision.action)} />
+                <Fact label="Matched Policy" value={gate.policy_decision.matched_policy ?? "Semantic Risk"} />
+                <p className="text-sm leading-6 text-neutral-600">{gate.policy_decision.reason}</p>
+              </div>
+            </Section>
+          </>
         ) : null}
-      </Section>
 
-      <Section title="Dependency Graph">
-        <DependencyGraph gate={gate} />
-      </Section>
+        {tab === "trajectory" ? (
+          <>
+            <Section title="Trajectory">
+              <p>{card?.trajectory_preview ?? "No trajectory preview available."}</p>
+              {card?.full_trajectory?.next_steps?.length ? (
+                <ol className="mt-3 flex flex-col gap-2">
+                  {card.full_trajectory.next_steps.map((step) => (
+                    <li key={`${step.step}-${step.action}`} className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                        Step {step.step}
+                      </span>
+                      <p className="mt-1 text-sm font-semibold text-neutral-950">{step.action}</p>
+                      <p className="mt-1 text-xs leading-5 text-neutral-600">{step.rationale}</p>
+                    </li>
+                  ))}
+                </ol>
+              ) : null}
+            </Section>
+            <Section title="Dependency Graph">
+              <DependencyGraph gate={gate} />
+            </Section>
+          </>
+        ) : null}
 
-      <Section title="Why Confidence Changed">
-        <ConfidenceFactors gate={gate} />
-      </Section>
+        {tab === "evidence" ? (
+          <>
+            <Section title="Why Confidence Changed">
+              <ConfidenceFactors gate={gate} />
+            </Section>
+            <Section title="Risk Evidence">
+              <ul className="flex flex-col gap-2">
+                {gate.risk_assessment.evidence.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </Section>
+            {gate.human_reason ? (
+              <Section title="Decision History">
+                <p>{gate.human_reason}</p>
+              </Section>
+            ) : null}
+          </>
+        ) : null}
 
-      <Section title="Risk Evidence">
-        <ul className="flex flex-col gap-2">
-          {gate.risk_assessment.evidence.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      </Section>
-
-      {gate.human_reason ? (
-        <Section title="Decision History">
-          <p>{gate.human_reason}</p>
-        </Section>
-      ) : null}
-
-      <div className="mt-5 grid gap-2">
-        <button
-          onClick={() => onExplain(gate)}
-          className="h-10 rounded-md border border-neutral-300 text-sm font-semibold text-neutral-900 hover:border-neutral-950"
-        >
-          {explainLoading ? "Loading Explanation" : "Explain More"}
-        </button>
-        {explainError ? <p className="text-xs leading-5 text-red-700">{explainError}</p> : null}
+        {tab === "explain" ? (
+          <>
+            <button
+              onClick={() => onExplain(gate)}
+              className="h-10 w-full rounded-md border border-neutral-300 text-sm font-semibold text-neutral-900 hover:border-neutral-950"
+            >
+              {explainLoading ? "Loading Explanation" : "Explain More"}
+            </button>
+            {explainError ? <p className="mt-2 text-xs leading-5 text-red-700">{explainError}</p> : null}
+            {explain ? <ExplainMorePanel explain={explain} trace={trace} /> : null}
+          </>
+        ) : null}
       </div>
 
-      {explain ? <ExplainMorePanel explain={explain} trace={trace} /> : null}
-
-      {canDecide ? (
-        <>
-          <label className="mt-5 block text-xs font-semibold uppercase tracking-wide text-neutral-500" htmlFor="decision-note">
-            Gate Decision Note
-          </label>
-          <input
-            id="decision-note"
-            value={decisionNote}
-            onChange={(event) => onDecisionNote(event.target.value)}
-            className="mt-2 h-10 w-full rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-950"
-          />
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            <DecisionButton tone="approve" onClick={() => onDecision(gate, "approve")}>Approve</DecisionButton>
-            <DecisionButton tone="block" onClick={() => onDecision(gate, "block")}>Block</DecisionButton>
-            <DecisionButton tone="modify" onClick={() => onDecision(gate, "modify")}>Modify</DecisionButton>
-          </div>
-          <p className="mt-3 text-xs leading-5 text-neutral-500">
-            In app-server proxy mode, Codex is waiting for this decision before the approval response is returned.
+      <div className="border-t border-neutral-200 p-5">
+        {canDecide ? (
+          <>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500" htmlFor="decision-note">
+              Gate Decision Note
+            </label>
+            <input
+              id="decision-note"
+              value={decisionNote}
+              onChange={(event) => onDecisionNote(event.target.value)}
+              className="mt-2 h-10 w-full rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-950"
+            />
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <DecisionButton tone="approve" onClick={() => onDecision(gate, "approve")}>Approve</DecisionButton>
+              <DecisionButton tone="block" onClick={() => onDecision(gate, "block")}>Block</DecisionButton>
+              <DecisionButton tone="modify" onClick={() => onDecision(gate, "modify")}>Modify</DecisionButton>
+            </div>
+            <p className="mt-3 text-xs leading-5 text-neutral-500">
+              In app-server proxy mode, Codex is waiting for this decision before the approval response is returned.
+            </p>
+          </>
+        ) : (
+          <p className="text-xs leading-5 text-neutral-500">
+            This gate is resolved in the AgentLens ledger.
           </p>
-        </>
-      ) : (
-        <p className="mt-5 border-t border-neutral-200 pt-4 text-xs leading-5 text-neutral-500">
-          This gate is resolved in the AgentLens ledger.
-        </p>
-      )}
+        )}
+      </div>
     </aside>
   );
 }
+
+const inspectorTabs = [
+  { id: "summary", label: "Summary" },
+  { id: "trajectory", label: "Trajectory" },
+  { id: "evidence", label: "Evidence" },
+  { id: "explain", label: "Explain" },
+] as const;
+type InspectorTab = (typeof inspectorTabs)[number]["id"];
 
 function ExplainMorePanel({ explain, trace }: { explain: ExplainMoreResponse; trace?: TraceEvent }) {
   const [question, setQuestion] = useState("");
@@ -749,11 +912,11 @@ export function LedgerAnalyticsPanel({
 }) {
   return (
     <Panel>
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-baseline justify-between gap-3">
         <PanelTitle eyebrow="Audit Intelligence" title="Ledger Analytics" icon={<BarChart3 size={18} />} />
         <p className="text-3xl font-semibold leading-none">{trustScore === null ? "--" : `${trustScore}%`}</p>
       </div>
-      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+      <div className="mt-6 grid gap-5 lg:grid-cols-2">
         <ChartBlock title="Approval Patterns">
           <BucketBarChart buckets={analytics?.approval_patterns ?? []} />
         </ChartBlock>
@@ -761,7 +924,7 @@ export function LedgerAnalyticsPanel({
           <BucketBarChart buckets={analytics?.risk_distribution ?? []} />
         </ChartBlock>
       </div>
-      <div className="mt-4 rounded-md border border-neutral-200 bg-neutral-50 p-3">
+      <div className="mt-5 rounded-md border border-neutral-200 bg-neutral-50 p-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Trust Score Basis</p>
         <p className="mt-2 text-sm leading-6 text-neutral-700">
           {analytics
@@ -820,7 +983,7 @@ export function ConfidenceFactors({ gate }: { gate: Gate }) {
 
 export function TrajectoryView({ gates, traces, traceByProposal }: { gates: Gate[]; traces: TraceEvent[]; traceByProposal: Map<string, TraceEvent> }) {
   return (
-    <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+    <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
       <Panel>
         <PanelTitle eyebrow="Counterfactual Engine" title="Predicted Agent Direction" icon={<GitBranch size={18} />} />
         {gates.length === 0 ? (
@@ -920,7 +1083,7 @@ export function SlackSurfaceView({
   onSend: () => void;
 }) {
   return (
-    <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+    <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
       <Panel>
         <PanelTitle
           eyebrow="Ambient Surface"
@@ -979,7 +1142,7 @@ export function AuditEventsView({
   trustScore: number | null;
 }) {
   return (
-    <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+    <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
       <Panel>
         <PanelTitle
           eyebrow="Audit Events"
@@ -1090,24 +1253,47 @@ function TrajectoryCard({ gate, trace, step }: { gate: Gate; trace: TraceEvent |
 }
 
 function EmptyQueue({ sessionId, apiUrl, localGuardMode }: { sessionId: string | null; apiUrl: string; localGuardMode: boolean }) {
+  const title = sessionId ? "Live Session is Listening" : "Waiting for Codex Activity";
+  const body = sessionId
+    ? localGuardMode
+      ? "Continue working in Codex. AgentLens will capture tool proposals into this ledger in real-time."
+      : "Run the local adapter to forward Codex events into this hosted review queue."
+    : "Start a Codex session through the local guard, terminal runner, or native proxy.";
+
   return (
-    <Panel>
-      <EmptyState
-        title={sessionId ? "Live session is listening" : "Waiting for Codex activity"}
-        body={
-          sessionId
-            ? localGuardMode
-              ? "Continue working in Codex. AgentLens will capture tool proposals into this ledger."
-              : "Run the local adapter to forward Codex events into this hosted review queue."
-            : "Start a Codex session through the local guard, terminal runner, or native proxy."
-        }
-      />
+    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-neutral-300 bg-white py-12 px-6 text-center shadow-sm">
+      <div className="relative mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-neutral-50 border border-neutral-200">
+        <Terminal className="text-neutral-500" size={24} />
+        {sessionId ? (
+          <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75 animate-pulse"></span>
+            <span className="relative inline-flex h-3.5 w-3.5 rounded-full bg-emerald-500 border-2 border-white"></span>
+          </span>
+        ) : (
+          <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5">
+            <span className="relative inline-flex h-3.5 w-3.5 rounded-full bg-amber-500 border-2 border-white"></span>
+          </span>
+        )}
+      </div>
+      <h3 className="text-lg font-semibold text-neutral-900 tracking-tight">{title}</h3>
+      <p className="mt-2 max-w-md text-sm text-neutral-600 leading-relaxed">{body}</p>
+
       {!localGuardMode && sessionId ? (
-        <code className="mt-4 block overflow-x-auto rounded-md border border-neutral-200 bg-neutral-950 p-3 text-xs leading-6 text-neutral-100">
-          cd backend && uv run agentlens-codex --api-url {apiUrl} --repo /path/to/your/repo &quot;Inspect this repo&quot;
-        </code>
+        <div className="mt-6 w-full max-w-xl text-left">
+          <div className="flex items-center justify-between rounded-t-lg bg-neutral-900 px-4 py-2 border-b border-neutral-800">
+            <div className="flex gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-red-500"></span>
+              <span className="h-2.5 w-2.5 rounded-full bg-yellow-500"></span>
+              <span className="h-2.5 w-2.5 rounded-full bg-green-500"></span>
+            </div>
+            <span className="text-[10px] font-mono text-neutral-400">bash</span>
+          </div>
+          <code className="block overflow-x-auto rounded-b-lg bg-neutral-950 p-4 font-mono text-xs leading-relaxed text-emerald-400 border border-t-0 border-neutral-800 shadow-inner">
+            cd backend && uv run agentlens-codex --api-url {apiUrl} --repo /path/to/your/repo &quot;Inspect this repo&quot;
+          </code>
+        </div>
       ) : null}
-    </Panel>
+    </div>
   );
 }
 
@@ -1133,11 +1319,179 @@ function answerExplainQuestion(question: string, explain: ExplainMoreResponse) {
 
 function SectionHeader({ eyebrow, title, body }: { eyebrow: string; title: string; body: string }) {
   return (
-    <div className="border-b border-neutral-300 pb-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{eyebrow}</p>
-      <div className="mt-1 grid gap-3 xl:grid-cols-[230px_minmax(0,1fr)] xl:items-end">
-        <h2 className="text-2xl font-semibold leading-tight">{title}</h2>
-        <p className="max-w-3xl text-sm leading-6 text-neutral-600">{body}</p>
+    <div className="border-b border-neutral-200 pb-4">
+      <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">{eyebrow}</p>
+      <h2 className="mt-1 text-2xl font-bold leading-tight text-neutral-900">{title}</h2>
+      {body ? (
+        <p className="mt-2 max-w-4xl text-sm leading-relaxed text-neutral-600">
+          {body}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+export function TimelineAnalyticsTabs({
+  traces,
+  gates,
+  analytics,
+  trustScore,
+}: {
+  traces: TraceEvent[];
+  gates: Gate[];
+  analytics: LedgerAnalytics | null;
+  trustScore: number | null;
+}) {
+  const [activeTab, setActiveTab] = useState<"timeline" | "analytics">("timeline");
+
+  return (
+    <section className="rounded-lg border border-neutral-200 bg-white shadow-sm overflow-hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-neutral-200 px-5 bg-neutral-50/50">
+        <div className="flex gap-6">
+          <button
+            onClick={() => setActiveTab("timeline")}
+            className={`flex items-center gap-2 border-b-2 py-4 text-xs font-bold uppercase tracking-wider transition outline-none ${
+              activeTab === "timeline"
+                ? "border-neutral-900 text-neutral-900"
+                : "border-transparent text-neutral-400 hover:text-neutral-700"
+            }`}
+          >
+            <Terminal size={14} />
+            Execution Timeline
+            <span className="inline-flex items-center justify-center rounded-full bg-neutral-200 text-neutral-800 text-[10px] font-bold px-1.5 py-0.5 leading-none">
+              {traces.length}
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveTab("analytics")}
+            className={`flex items-center gap-2 border-b-2 py-4 text-xs font-bold uppercase tracking-wider transition outline-none ${
+              activeTab === "analytics"
+                ? "border-neutral-900 text-neutral-900"
+                : "border-transparent text-neutral-400 hover:text-neutral-700"
+            }`}
+          >
+            <BarChart3 size={14} />
+            Ledger Analytics
+            {trustScore !== null && (
+              <span className="inline-flex items-center justify-center rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold px-1.5 py-0.5 leading-none">
+                {trustScore}%
+              </span>
+            )}
+          </button>
+        </div>
+        <div className="py-2.5 sm:py-0 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
+          Audit Intelligence Console
+        </div>
+      </div>
+
+      <div className="p-6">
+        {activeTab === "timeline" ? (
+          <TimelineContent traces={traces} gates={gates} />
+        ) : (
+          <AnalyticsContent analytics={analytics} trustScore={trustScore} />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function TimelineContent({ traces, gates }: { traces: TraceEvent[]; gates: Gate[] }) {
+  const inspectionTraces = traces.filter((trace) => isInspectionTrace(trace));
+  const visibleTraces = traces.filter((trace) => !isInspectionTrace(trace));
+
+  if (traces.length === 0) {
+    return (
+      <EmptyState
+        title="No intercepted tool calls yet"
+        body="Continue working in Codex. AgentLens will automatically stream the execution timeline."
+      />
+    );
+  }
+
+  return (
+    <div className="relative border-l-2 border-neutral-200 pl-6 ml-3 space-y-6 py-1">
+      {inspectionTraces.length > 0 ? (
+        <div className="relative">
+          <span className="absolute -left-[31px] top-1 flex h-4 w-4 items-center justify-center rounded-full border border-emerald-400 bg-white">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          </span>
+          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">Inspection Batch</p>
+          <p className="mt-1 text-sm font-semibold text-neutral-900">Captured and auto-executed</p>
+          <p className="mt-1 text-xs text-neutral-500 leading-relaxed">
+            {inspectionTraces.length} read-only commands and file queries collapsed.
+          </p>
+        </div>
+      ) : null}
+
+      {visibleTraces.map((trace, index) => (
+        <div key={trace.id} className="relative">
+          <span className="absolute -left-[31px] top-1 flex h-4 w-4 items-center justify-center rounded-full border border-neutral-400 bg-white">
+            <span className="h-1.5 w-1.5 rounded-full bg-neutral-600" />
+          </span>
+          <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
+            Step {index + 1} &bull; {toolLabel(trace.tool_name)}
+          </p>
+          <p className="mt-1 text-sm font-medium text-neutral-800">
+            {trace.stated_reason || summarizeTrace(trace)}
+          </p>
+        </div>
+      ))}
+
+      {gates.filter((gate) => gate.status !== "auto_executed").slice(-4).map((gate) => (
+        <div key={gate.id} className="relative">
+          <span className="absolute -left-[31px] top-1 flex h-4 w-4 items-center justify-center rounded-full border border-sky-400 bg-white">
+            <span className="h-1.5 w-1.5 rounded-full bg-sky-500 animate-pulse" />
+          </span>
+          <p className="text-xs font-semibold uppercase tracking-wider text-sky-700">
+            {titleCase(gate.status)} Gate
+          </p>
+          <p className="mt-1 text-sm text-neutral-700">
+            {gate.intelligence_card?.summary ?? gate.policy_decision.reason}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AnalyticsContent({
+  analytics,
+  trustScore,
+}: {
+  analytics: LedgerAnalytics | null;
+  trustScore: number | null;
+}) {
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-5 md:grid-cols-2">
+        <ChartBlock title="Approval Patterns">
+          <BucketBarChart buckets={analytics?.approval_patterns ?? []} />
+        </ChartBlock>
+        <ChartBlock title="Risk Distribution">
+          <BucketBarChart buckets={analytics?.risk_distribution ?? []} />
+        </ChartBlock>
+      </div>
+
+      <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Trust Score Basis</p>
+          <p className="mt-1.5 text-sm text-neutral-700 leading-relaxed">
+            {analytics
+              ? `${analytics.trust_score.auto_executed} actions auto-executed, ${analytics.trust_score.human_interventions} required human intervention.`
+              : "No actions recorded yet."}
+          </p>
+        </div>
+        {trustScore !== null && (
+          <div className="shrink-0 flex items-center gap-3 border-t md:border-t-0 md:border-l border-neutral-200 pt-3 md:pt-0 md:pl-6">
+            <div className="text-right">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400 block">Trust Level</span>
+              <span className="text-2xl font-bold text-neutral-900">{trustScore}%</span>
+            </div>
+            <div className="h-10 w-10 flex items-center justify-center rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100">
+              <ShieldCheck size={20} />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1182,19 +1536,28 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 function Fact({ label, value }: { label: string; value: string }) {
+  const colors: Record<string, string> = {
+    Low: "text-emerald-600 bg-emerald-50 border-emerald-100",
+    Medium: "text-amber-600 bg-amber-50 border-amber-100",
+    High: "text-orange-600 bg-orange-50 border-orange-100",
+    Critical: "text-red-600 bg-red-50 border-red-100",
+  };
+
+  const badgeColor = colors[value] ?? "text-neutral-800 bg-neutral-50 border-neutral-200";
+
   return (
-    <div className="border border-neutral-200 bg-neutral-50 p-3">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{label}</p>
-      <p className="mt-1 truncate text-sm font-semibold text-neutral-950">{value}</p>
+    <div className={`border rounded-lg p-3 text-center transition hover:bg-white hover:shadow-sm duration-200 ${badgeColor}`}>
+      <p className="text-[9px] font-bold uppercase tracking-wider opacity-85">{label}</p>
+      <p className="mt-1 truncate text-sm font-bold">{value}</p>
     </div>
   );
 }
 
 function ChartBlock({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="h-52 rounded-md border border-neutral-200 bg-neutral-50 p-3">
+    <div className="flex h-56 flex-col rounded-md border border-neutral-200 bg-neutral-50 p-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{title}</p>
-      <div className="mt-2 h-40">{children}</div>
+      <div className="mt-2 min-h-0 flex-1">{children}</div>
     </div>
   );
 }
@@ -1212,20 +1575,35 @@ function Metric({
   accent?: "neutral" | "green" | "sky" | "red";
   icon: ReactNode;
 }) {
-  const styles = {
-    neutral: "border-neutral-200",
-    green: "border-emerald-300",
-    sky: "border-sky-300",
-    red: "border-red-300",
+  const borderStyles = {
+    neutral: "border-l-neutral-300 border-t-neutral-200 border-r-neutral-200 border-b-neutral-200",
+    green: "border-l-emerald-500 border-t-neutral-200 border-r-neutral-200 border-b-neutral-200",
+    sky: "border-l-sky-500 border-t-neutral-200 border-r-neutral-200 border-b-neutral-200",
+    red: "border-l-red-500 border-t-neutral-200 border-r-neutral-200 border-b-neutral-200",
   };
+  
+  const iconColor = {
+    neutral: "text-neutral-400",
+    green: "text-emerald-500",
+    sky: "text-sky-500",
+    red: "text-red-500",
+  };
+
+  const bgStyles = {
+    neutral: "bg-white",
+    green: "bg-gradient-to-br from-white to-emerald-50/10",
+    sky: "bg-gradient-to-br from-white to-sky-50/10",
+    red: "bg-gradient-to-br from-white to-red-50/10",
+  };
+
   return (
-    <div className={`rounded-lg border bg-white px-4 py-3 shadow-sm ${styles[accent]}`}>
+    <div className={`rounded-lg border-l-4 border-t border-r border-b ${borderStyles[accent]} ${bgStyles[accent]} p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition duration-200`}>
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{label}</p>
-        <span className="text-neutral-400">{icon}</span>
+        <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">{label}</p>
+        <span className={iconColor[accent]}>{icon}</span>
       </div>
-      <p className="mt-2 truncate text-2xl font-semibold leading-none">{value}</p>
-      {sublabel ? <p className="mt-1 text-xs text-neutral-500">{sublabel}</p> : null}
+      <p className="mt-2.5 truncate text-2xl font-bold tracking-tight text-neutral-900 leading-none">{value}</p>
+      {sublabel ? <p className="mt-1 text-[11px] font-medium text-neutral-400">{sublabel}</p> : null}
     </div>
   );
 }
@@ -1264,14 +1642,33 @@ function StatusBadge({ status }: { status: GateStatus }) {
   );
 }
 
-function DecisionButton({ tone, onClick, children }: { tone: "approve" | "block" | "modify"; onClick: () => void; children: ReactNode }) {
+function DecisionButton({
+  tone,
+  onClick,
+  children,
+}: {
+  tone: "approve" | "block" | "modify";
+  onClick: () => void;
+  children: ReactNode;
+}) {
   const styles = {
-    approve: "bg-neutral-950 text-white hover:bg-neutral-800",
-    block: "border border-red-700 text-red-800 hover:bg-red-50",
-    modify: "border border-neutral-300 text-neutral-800 hover:border-neutral-950",
+    approve: "bg-emerald-600 text-white hover:bg-emerald-700 border-transparent shadow-sm",
+    block: "bg-red-50 border border-red-200 text-red-700 hover:bg-red-100",
+    modify: "bg-white border border-neutral-300 text-neutral-700 hover:border-neutral-900 hover:text-neutral-900",
   };
+
+  const icons = {
+    approve: <Check size={14} className="mr-1.5 shrink-0" />,
+    block: <Ban size={14} className="mr-1.5 shrink-0" />,
+    modify: <Edit3 size={14} className="mr-1.5 shrink-0" />,
+  };
+
   return (
-    <button onClick={onClick} className={`h-10 rounded-md text-sm font-semibold ${styles[tone]}`}>
+    <button
+      onClick={onClick}
+      className={`h-10 flex items-center justify-center rounded-md text-xs font-bold uppercase tracking-wider transition ${styles[tone]}`}
+    >
+      {icons[tone]}
       {children}
     </button>
   );
@@ -1279,9 +1676,10 @@ function DecisionButton({ tone, onClick, children }: { tone: "approve" | "block"
 
 function EmptyState({ title, body }: { title: string; body: string }) {
   return (
-    <div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 p-5">
-      <p className="font-semibold">{title}</p>
-      <p className="mt-2 text-sm leading-6 text-neutral-600">{body}</p>
+    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-neutral-300 bg-neutral-50/50 py-10 px-4 text-center">
+      <Info className="text-neutral-400 mb-3" size={24} />
+      <p className="font-semibold text-neutral-900">{title}</p>
+      <p className="mt-1.5 max-w-xs text-xs leading-relaxed text-neutral-500">{body}</p>
     </div>
   );
 }
@@ -1308,7 +1706,14 @@ function LedgerRow({ label, title, body }: { label: string; title: string; body:
   );
 }
 
-function StatusLine({ label, value, ok }: { label: string; value: string; ok: boolean }) {
+function StatusLine({ label, value, ok, collapsed = false }: { label: string; value: string; ok: boolean; collapsed?: boolean }) {
+  if (collapsed) {
+    return (
+      <div className="flex items-center justify-center py-1.5" title={`${label}: ${value}`}>
+        <span className={`h-2 w-2 rounded-full ${ok ? "bg-emerald-400" : "bg-amber-400"}`} />
+      </div>
+    );
+  }
   return (
     <div className="flex items-center justify-between gap-3 py-2">
       <div className="min-w-0">

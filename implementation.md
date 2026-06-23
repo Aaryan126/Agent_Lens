@@ -233,6 +233,16 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
   passed, targeted backend ruff passed, frontend `npm run build` passed, and full backend
   non-integration tests reported 80 passed with 2 integration tests deselected and 1
   existing Starlette/httpx deprecation warning.
+- Frontend operator console polish pass: the sidebar is now sticky, full-height, and
+  collapsible to an icon-only mode with its bottom status indicators always visible.
+  Main-page spacing was tightened to a consistent `gap-5` rhythm, the gate queue table
+  uses fixed column widths so the collapsed inspection batch aligns with normal rows,
+  the ledger analytics charts share equal flex heights and better baseline alignment
+  with the trust score, and the gate inspector became a tabbed panel (Summary,
+  Trajectory, Evidence, Explain) with its own scrollable content area and sticky
+  decision controls, removing the long single-page scroll. Validation passed:
+  frontend `npm run build` passed and the local dev server rendered the new layout.
+- Premium operator console polish: redesigned empty states with centered layouts, illustrative icons, and a pulsing live connection indicator. Realigned the collapsed inspection batch row in the decision table to standard table columns. Consolidated the horizontal execution timeline and ledger analytics panels into a full-width, clean `TimelineAnalyticsTabs` container to eliminate horizontal squeezing. Added client-side search filtering to the gate queue table in real-time, redesigned the metric strip cards with hover elevations and custom border colors, styled the inspector facts, and added check/ban/edit icons to decision buttons. Next.js build and type validations pass.
 
 ## Known Gaps
 

@@ -47,6 +47,8 @@ operators replay the session and inspect evidence.
 - Lucide React provides consistent interface icons.
 - The inspector includes Explain More, trajectory, dependency evidence, confidence
   calibration, policy match, raw sanitized tool payload, and decision controls.
+- The UI follows the active local Codex session by default and can pin a specific session
+  or gate when multiple terminals are running.
 
 ## Setup
 
