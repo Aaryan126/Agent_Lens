@@ -121,8 +121,8 @@ cd backend
 uv run agentlens-dev --repo /path/to/your/repo
 ```
 
-This starts the local guard API, starts the Next.js ledger, starts the native Codex proxy,
-waits for each service to become ready, and then launches Codex connected to AgentLens.
+This starts the local guard API, Next.js ledger, and native Codex proxy, waits for each
+service to become ready, and then launches Codex connected to AgentLens.
 Press `Ctrl+C` to stop Codex and the AgentLens child processes.
 
 If the local virtualenv has not refreshed the new console script yet, use the module
@@ -244,10 +244,9 @@ pre-execution control path.
 with the proxy approval path in the same Codex TUI process.
 
 This proxy is the preferred experimental path for native TUI integration. Use
-`agentlens-run` when you need the most reliable strict local approval loop today, because
-it owns the approval prompt directly. Use the proxy when you want the normal Codex UI and
-are validating how much AgentLens context the native approval prompt can display without
-forking Codex.
+`agentlens-run` for the strictest local approval loop, or use the proxy when you want the
+normal Codex UI and are validating how much AgentLens context the native approval prompt
+can display without forking Codex.
 
 ### Normal Codex TUI Hook Mode
 

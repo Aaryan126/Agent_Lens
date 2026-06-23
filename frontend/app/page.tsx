@@ -356,6 +356,15 @@ export default function Home() {
           gates={gates}
           traces={traces}
           traceByProposal={traceByProposal}
+          apiUrl={apiUrl}
+          localGuardMode={localGuardMode}
+          decisionNote={decisionNote}
+          explain={explain}
+          explainLoading={explainLoading}
+          explainError={explainError}
+          onDecisionNote={setDecisionNote}
+          onDecision={decide}
+          onExplain={explainGate}
           onSelectGate={handleFlowGateSelect}
         />
       ) : null}

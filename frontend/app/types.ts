@@ -75,12 +75,20 @@ export type Gate = {
   resolved_at?: string | null;
 };
 
+export type GitSnapshot = {
+  status_short: string;
+  diff: string;
+  available: boolean;
+  error: string | null;
+};
+
 export type TraceEvent = {
   id: string;
   proposal_id: string;
   tool_name: string;
   params: Record<string, unknown>;
   stated_reason: string | null;
+  git_snapshot?: GitSnapshot;
   created_at?: string;
 };
 

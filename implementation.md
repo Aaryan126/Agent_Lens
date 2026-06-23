@@ -316,9 +316,13 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
   separate unconnected flowcharts on the same canvas, each starting with its task prompt
   and ending with a "Task Complete" card. Predicted trajectory future steps ("likely next"
   nodes) are completely removed from the graph view to keep the layout clean, with their
-  details remaining in the Review Queue inspector. Clicking a gate selects it and switches
-  back to the Review Queue inspector. The view is accessible from the sidebar and Next.js
-  production build compiles successfully.
+  details remaining in the Review Queue inspector.
+- The Flow Map has been upgraded into a fully interactive dual-pane supervision console:
+  - Users can select nodes directly on the flowchart canvas. Selecting a Start Node, Trace Node, or Gate Node opens a corresponding custom inspector pane in the right column of the view without switching tabs.
+  - The embedded Gate Inspector supports inline gate decisions (Approve, Block, Modify) and Q&A questions directly on the flowchart canvas. Clicking "Open in Review Queue" switches the active view to review the selected gate.
+  - The Trace Node inspector includes a dark terminal console displaying pretty-printed JSON params, stated reasons, and colorized git diff excerpts for file changes.
+  - Selected nodes highlight with active glowing overlays matching their risk level, flow map connection lines animate when pointing to pending gates, and the canvas includes top-level action buttons to fit view, lock interaction, or toggle the background grid.
+  - Production Next.js build and type check compile successfully.
 
 ## Known Gaps
 

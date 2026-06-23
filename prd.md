@@ -162,7 +162,7 @@ This is a second LLM call that answers the user's question in context, using the
 
 ### 4.3 Secondary Surface: Session Ledger
 
-A lightweight web view (Next.js) opened optionally at the end of a session or week. Not a live dashboard. Contents:
+A lightweight web view (Next.js) opened optionally at the end of a session or week. Contents:
 
 - **Session timeline:** chronological replay of everything Codex did, every gate triggered, every human decision made
 - **Approval patterns:** what types of actions you block most often — surfaces candidates for new standing policies

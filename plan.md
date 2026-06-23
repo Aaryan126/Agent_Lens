@@ -393,6 +393,8 @@ to support grouping multiple sequential tasks/prompts executed in the same sessi
 into separate, unconnected flowcharts. Predicted trajectory future steps ("likely next"
 nodes) are completely removed from the graph itself to keep the layout clean. Production Next.js `npm run build` passes.
 
+Fourth follow-up status: The Flow Map has been enriched into a fully interactive, dual-pane console. Users can select nodes directly on the flowchart to open detail inspectors for Gates, Traces, and Task prompts in the right column, resolve pending gates with inline Approve/Block/Modify controls, inspect pretty-printed parameters and git diffs in a dark terminal style block, and toggle background grid/interaction options via top bar controls. Production Next.js build passes.
+
 ## Phase 14: Policy Management UI
 
 Make the PRD policy engine manageable from the session ledger instead of only through
