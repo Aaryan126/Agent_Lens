@@ -303,6 +303,19 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
   tests/test_codex_proxy.py tests/test_policy_risk.py tests/test_codex_app_server.py
   tests/test_session_api.py` reported 52 passed with 1 existing Starlette/httpx warning,
   and targeted backend `ruff check` passed.
+- A new "Flow Map" view is added to the frontend as an alternative supervision surface.
+  It renders the session as an interactive React Flow graph: the original instruction as
+  the start node, each trace and gate as connected nodes, risk-coded gate cards with
+  confidence and drift badges, and a "Task Complete" end node. The layout flows
+  left-to-right in rows, avoiding the snake routing that produced dangling-looking edges.
+  Gate node headers are compacted so tool label, confidence, and status fit on one line,
+  the redundant risk badge is removed, and the MiniMap was removed because it appeared as
+  an unexplained white rectangle. Predicted trajectory future steps were removed from the
+  graph itself to prevent overlap and keep the flow clean; the trajectory detail remains
+  available in the Review Queue inspector. Clicking a gate selects it and switches back to
+  the Review Queue inspector. The view uses only the existing backend endpoints
+  (`/sessions/{id}/timeline`) and does not require backend changes. It is accessible from
+  the sidebar and production Next.js `npm run build` passes.
 
 ## Known Gaps
 

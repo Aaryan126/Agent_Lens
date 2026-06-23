@@ -37,8 +37,6 @@ The web surface is now a professional session ledger rather than only a live app
 dashboard. It keeps the core PRD model intact: Codex remains the primary work surface,
 Slack/native Codex prompts interrupt when judgment is needed, and the dashboard is where
 operators replay the session and inspect evidence.
-The UI is designed to make approvals, risk signals, and supporting evidence readable at a glance.
-
 - TanStack Table powers the gate queue with clear selected-row state and dense decision
   columns.
 - Recharts renders ledger analytics for approval patterns, risk distribution, and trust
@@ -245,9 +243,7 @@ emits structured events for those actions; approval requests remain the authorit
 pre-execution control path.
 
 `AGENTLENS_DISABLE_HOOKS=1` prevents the older project-local hook mirror from competing
-with the proxy approval path in the same Codex TUI process. The proxy observes turns and
-approval requests directly from the app-server protocol, so the hook layer is not needed
-for this workflow.
+with the proxy approval path in the same Codex TUI process.
 
 This proxy is the preferred experimental path for native TUI integration. Use
 `agentlens-run` when you need the most reliable strict local approval loop today, because

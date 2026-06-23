@@ -386,6 +386,13 @@ reported 2 passed.
 
 Second follow-up status: Console UI layout, sidebar, topbar controls, and metrics boxes have been polished. Sidebar logo alignment is centered in collapsed mode with the close chevron removed. Topbar controls use a fluid flex wrap layout with specific widths to prevent layout overlaps. Metrics boxes use solid bg-white backgrounds with matching border accents and no hover animations. TrajectoryView and AuditEventsView have been reverted from tabbed navigation to responsive side-by-side grids (xl:grid-cols-[1.2fr_0.8fr] and xl:grid-cols-[1.1fr_0.9fr]) showing both sections simultaneously. Production Next.js build compiled successfully.
 
+Third follow-up status: A new "Flow Map" view is added as an alternative supervision
+surface alongside the existing Review Queue. It visualizes the session as a connected
+React Flow graph (original instruction → traces → gates → predicted trajectory steps)
+with risk-coded cards, animated pending edges, minimap, and clickable gates that return
+to the Review Queue inspector. The implementation uses only existing backend endpoints
+and requires no backend changes. Production Next.js `npm run build` passes.
+
 ## Phase 14: Policy Management UI
 
 Make the PRD policy engine manageable from the session ledger instead of only through

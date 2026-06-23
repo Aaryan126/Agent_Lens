@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { FlowMapView } from "./components/flow-map-view";
 import {
   AppShell,
   AuditEventsView,
@@ -291,6 +292,11 @@ export default function Home() {
     }
   }
 
+  const handleFlowGateSelect = useCallback((gateId: string) => {
+    setSelectedGateId(gateId);
+    setActiveView("review");
+  }, []);
+
   return (
     <AppShell
       activeView={activeView}
@@ -342,6 +348,15 @@ export default function Home() {
           onDecisionNote={setDecisionNote}
           onDecision={decide}
           onExplain={explainGate}
+        />
+      ) : null}
+      {activeView === "flow" ? (
+        <FlowMapView
+          session={demo?.session ?? null}
+          gates={gates}
+          traces={traces}
+          traceByProposal={traceByProposal}
+          onSelectGate={handleFlowGateSelect}
         />
       ) : null}
       {activeView === "trajectory" ? (

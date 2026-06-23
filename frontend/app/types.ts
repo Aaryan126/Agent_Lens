@@ -1,7 +1,7 @@
 export type RiskLevel = "low" | "medium" | "high" | "critical";
 export type GateStatus = "pending" | "approved" | "blocked" | "modified" | "auto_executed";
 export type HealthState = "checking" | "online" | "offline";
-export type View = "review" | "trajectory" | "policies" | "slack" | "audit";
+export type View = "review" | "flow" | "trajectory" | "policies" | "slack" | "audit";
 
 export type IntelligenceCard = {
   summary: string;

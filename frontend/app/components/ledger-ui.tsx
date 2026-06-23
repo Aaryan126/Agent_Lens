@@ -38,6 +38,7 @@ import {
   SlidersHorizontal,
   Terminal,
   Trash2,
+  Workflow,
   XCircle,
 } from "lucide-react";
 import {
@@ -109,6 +110,7 @@ type GateRow = {
 
 const navItems: { id: View; label: string; icon: ReactNode }[] = [
   { id: "review", label: "Review Queue", icon: <ClipboardList size={16} /> },
+  { id: "flow", label: "Flow Map", icon: <Workflow size={16} /> },
   { id: "trajectory", label: "Trajectory", icon: <GitBranch size={16} /> },
   { id: "policies", label: "Policy Ledger", icon: <SlidersHorizontal size={16} /> },
   { id: "slack", label: "Slack Surface", icon: <Bell size={16} /> },
