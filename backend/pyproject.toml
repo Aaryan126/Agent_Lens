@@ -10,6 +10,7 @@ dependencies = [
   "pydantic-settings>=2.4.0",
   "pyyaml>=6.0.2",
   "httpx>=0.27.0",
+  "websockets>=13.0",
   "openai>=1.40.0",
   "sqlalchemy[asyncio]>=2.0.32",
   "asyncpg>=0.29.0",
@@ -38,6 +39,9 @@ agentlens-demo = "agentlens.cli:main"
 agentlens-codex = "agentlens.codex_terminal:main"
 agentlens-guard = "agentlens.guard:main"
 agentlens-hook = "agentlens.codex_hook:main"
+agentlens-run = "agentlens.app_server_terminal:main"
+agentlens-codex-proxy = "agentlens.codex_proxy:main"
+agentlens-dev = "agentlens.dev_stack:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -16,6 +16,9 @@ from agentlens.schemas import GateStatus, ToolCallProposal
 
 
 def main() -> None:
+    if os.environ.get("AGENTLENS_DISABLE_HOOKS", "").lower() in {"1", "true", "yes"}:
+        return
+
     parser = argparse.ArgumentParser(
         description="Mirror Codex hook events from an interactive TUI session into AgentLens."
     )
@@ -315,6 +318,7 @@ def _proposal_from_hook(
             "source": "codex_hook",
             "hook_event": event_name,
             "raw_event": payload,
+            "fast_intelligence": True,
         },
     )
 

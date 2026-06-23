@@ -2,12 +2,18 @@
 
 AgentLens is a judgment layer for AI coding agents. It intercepts proposed tool calls, enriches them with codebase and session context, decides whether a human should review them, and records the full session in an audit-friendly ledger.
 
+It is built with a Python/FastAPI backend, a Next.js/TypeScript frontend, Pydantic schemas, OpenAI intelligence calls, SQLite/PostgreSQL storage, and local Codex app-server integrations.
+
 The current build is local-first: Codex can run normally in the terminal while project-local hooks mirror proposed tool calls into a local AgentLens guard. The hosted demo path remains available for judging, Slack validation, and remote review.
+Guarded app-server mode (`agentlens-run`) is the strict local workflow because AgentLens owns Codex approval callbacks before tool execution continues.
 
 ## Current Architecture
 
+Tech stack: Python, FastAPI, Next.js, TypeScript, Pydantic, OpenAI, SQLite, Docker,
+TanStack Table, Recharts, React Flow, and Lucide React.
+
 - `backend/`: Python SDK and FastAPI service.
-- `frontend/`: Next.js hosted approval console.
+- `frontend/`: Next.js session ledger and approval console.
 - `examples/`: sample sessions and configs for local demos.
 - `plan.md`: phased build and validation checklist.
 - `implementation.md`: latest implementation status.
@@ -25,6 +31,22 @@ The current build is local-first: Codex can run normally in the terminal while p
 - Call real OpenAI structured-output intelligence for gated actions when `OPENAI_API_KEY` is configured.
 - Route lightweight summarization to a nano model while reserving the strong model for consequential gated actions.
 - Explain decisions with trajectory, drift, confidence factors, dependency/reference evidence, and concise translation.
+
+## Frontend Ledger
+
+The web surface is now a professional session ledger rather than only a live approval
+dashboard. It keeps the core PRD model intact: Codex remains the primary work surface,
+Slack/native Codex prompts interrupt when judgment is needed, and the dashboard is where
+operators replay the session and inspect evidence.
+
+- TanStack Table powers the gate queue with clear selected-row state and dense decision
+  columns.
+- Recharts renders ledger analytics for approval patterns, risk distribution, and trust
+  score context.
+- React Flow renders dependency/reference evidence around affected files.
+- Lucide React provides consistent interface icons.
+- The inspector includes Explain More, trajectory, dependency evidence, confidence
+  calibration, policy match, raw sanitized tool payload, and decision controls.
 
 ## Setup
 
@@ -78,7 +100,64 @@ uv run agentlens-guard --repo /path/to/your/repo
 This starts a local AgentLens API at `http://127.0.0.1:8787`, stores the ledger locally,
 and keeps Codex execution on your machine.
 
-7. Run Codex from your terminal while mirroring events into AgentLens:
+7. Start the full local stack with one command:
+
+```bash
+cd backend
+uv run agentlens-dev --repo /path/to/your/repo
+```
+
+This starts the local guard API, starts the Next.js ledger, starts the native Codex proxy,
+waits for each service to become ready, and then launches Codex connected to AgentLens.
+Use this as the fastest local workflow. Press `Ctrl+C` to stop Codex and the AgentLens
+child processes.
+
+If the local virtualenv has not refreshed the new console script yet, use the module
+fallback:
+
+```bash
+cd backend
+uv run --no-sync python -m agentlens.dev_stack --repo /path/to/your/repo
+```
+
+To start the services without launching Codex, add `--no-codex`; the command prints the
+Codex connection command to run manually. Add `--open-dashboard` if you want the command
+to open the AgentLens ledger in your default browser after the services are ready.
+
+8. Run Codex through the guarded app-server terminal:
+
+```bash
+cd backend
+uv run agentlens-run --repo /path/to/your/repo
+```
+
+This starts an interactive terminal prompt. Each task launches a local Codex app-server
+turn, creates an AgentLens session, streams Codex output back to the terminal, and routes
+Codex app-server approval callbacks through AgentLens. Low-risk actions can pass
+automatically; pending risky actions wait for approval, block, or modify decisions in the
+terminal or dashboard before the app-server receives an accept/cancel response.
+
+For a single task:
+
+```bash
+uv run agentlens-run --repo /path/to/your/repo "Make the README clearer."
+```
+
+Keep the local guard and frontend running while using this command. This is the strict
+local workflow because AgentLens owns the Codex app-server approval channel instead of
+trying to infer control from an already-running TUI.
+
+When multiple Codex terminals are running, open the dashboard URL printed by the terminal
+you want to supervise. URLs with `?session=...` pin the dashboard to that session so
+another terminal cannot steal focus. Use the session picker in the header to switch
+sessions deliberately, or click **Follow Latest** when you intentionally want the
+dashboard to follow the newest local session. When a specific action needs approval,
+`agentlens-run` also prints a gate-specific review URL with `?gate=...`; open that URL
+to select the exact action the terminal is waiting on. For the fastest path, decide in
+the terminal with `a`/`approve`, `b`/`block`, or `m`/`modify`; keep the dashboard open
+only when you want the full trajectory, drift, dependency evidence, and ledger context.
+
+9. Run Codex from your terminal while mirroring JSON events into AgentLens:
 
 ```bash
 cd backend
@@ -92,7 +171,7 @@ open that URL to view the exact session created by the terminal run. The `api` q
 parameter lets the frontend connect to the same local guard that received the mirrored
 Codex events, even if the frontend was started without `NEXT_PUBLIC_AGENTLENS_API_URL`.
 
-8. Run the frontend approval console against the local guard:
+10. Run the frontend approval console against the local guard:
 
 ```bash
 cd frontend
@@ -104,20 +183,70 @@ local guarded Codex run, renders incoming Codex tool calls in the decision queue
 inspector, timeline, policy ledger, Slack surface, and audit views, and lets you approve,
 block, or modify pending gates.
 
-For a terminal-first local workflow, keep `agentlens-guard` and the frontend running,
-then use `agentlens-codex` for each Codex task. This is the reliable integration path
-today because it uses Codex JSON events. Attaching to an arbitrary already-running Codex
-TUI session should be built against Codex's experimental app-server or remote-control
-protocol, not by scraping terminal output.
+For a terminal-first strict workflow, use `agentlens-run`. For a simpler read-only or
+mirror-oriented workflow, use `agentlens-codex`. Attaching to an arbitrary already-running
+Codex TUI session remains best-effort through hooks unless that session is launched
+through an app-server-controlled surface.
+
+11. Run the native Codex TUI through the AgentLens app-server proxy:
+
+First keep the local guard running:
+
+```bash
+cd backend
+uv run agentlens-guard --repo /path/to/your/repo
+```
+
+Then start the proxy in another terminal:
+
+```bash
+cd backend
+uv run agentlens-codex-proxy --repo /path/to/your/repo
+```
+
+In another terminal, connect Codex to the proxy:
+
+```bash
+AGENTLENS_DISABLE_HOOKS=1 codex --ask-for-approval untrusted --sandbox workspace-write --remote ws://127.0.0.1:8791
+```
+
+This keeps the polished Codex TUI while placing AgentLens between the TUI and Codex
+app-server. Low-risk approvals are accepted automatically through AgentLens, pending
+approvals are forwarded to the native Codex prompt with concise AgentLens risk copy, and
+the native approve/cancel response is written back to the AgentLens ledger. The full
+dashboard URL is kept in structured `agentLens.dashboardUrl` metadata; the dashboard
+remains the detailed inspector for trajectory, drift, dependency evidence, and policy
+history.
+The proxy also rewrites forwarded `thread/start` and `turn/start` messages so Codex uses
+the proxy's configured approval policy, schema-correct sandbox payloads, and user
+approvals reviewer.
+Follow-up prompts in the same remote Codex TUI thread stay grouped in one AgentLens
+session, so the session picker represents conversations rather than every individual
+prompt.
+It also mirrors non-blocking command/read telemetry into the ledger when Codex app-server
+emits structured events for those actions; approval requests remain the authoritative
+pre-execution control path.
+
+`AGENTLENS_DISABLE_HOOKS=1` prevents the older project-local hook mirror from competing
+with the proxy approval path in the same Codex TUI process. The proxy observes turns and
+approval requests directly from the app-server protocol, so the hook layer is not needed
+for this workflow.
+
+This proxy is the preferred experimental path for native TUI integration. Use
+`agentlens-run` when you need the most reliable strict local approval loop today, because
+it owns the approval prompt directly. Use the proxy when you want the normal Codex UI and
+are validating how much AgentLens context the native approval prompt can display without
+forking Codex.
 
 ### Normal Codex TUI Hook Mode
 
 AgentLens also includes a project-local Codex hook config in `.codex/hooks.json`.
 This lets normal interactive Codex sessions mirror tool-use events into the local
 AgentLens guard without using `agentlens-codex`.
-In local hook mode, AgentLens records risky Codex tool calls and can attempt to hold
-pending gates while the dashboard records an approve, block, or modify decision. Treat
-this TUI hook path as best-effort until each Codex tool event type is live-validated.
+In local hook mode, AgentLens records Codex tool calls quickly for dashboard visibility.
+Treat this path as observability-first: Codex may continue after hook failures or
+timeouts depending on the tool event type. Use `agentlens-run` or
+`agentlens-codex-proxy` when an action must be paused before execution.
 
 1. Start the local guard:
 
@@ -153,13 +282,11 @@ local hook state is stored under `.agentlens/` and ignored by git.
 If you restart `agentlens-guard`, the hook automatically creates a fresh AgentLens
 session if the remembered local session no longer exists.
 
-Read-only inspection commands are auto-executed and collapsed in the dashboard. For risky
-hooked actions, the hook posts the proposal and can wait up to
-`AGENTLENS_APPROVAL_TIMEOUT_SECONDS` seconds for an AgentLens decision. Approved,
-modified, and auto-executed gates exit successfully; blocked or timed-out gates return a
-non-zero hook exit. Normal Codex TUI behavior can vary by tool/event type, so use this as
-best-effort enforcement until the specific path is validated. Set
-`AGENTLENS_ENFORCE_APPROVALS=0` for mirror-only ledger behavior.
+Read-only inspection commands are auto-executed and collapsed in the dashboard. Project
+hooks run in mirror-only mode by default so normal Codex sessions do not hang on full
+approval-card generation or dashboard polling. Set `AGENTLENS_ENFORCE_APPROVALS=1`
+manually only when testing a specific hook event type and you are prepared for Codex to
+treat that hook failure as best-effort rather than guaranteed enforcement.
 
 For hosted judging or remote viewing, start supervision in the web console, then run the
 command shown in the empty review queue from your local checkout. It uses the Codex CLI
@@ -330,6 +457,7 @@ hosted state with `AGENTLENS_STORAGE_BACKEND=postgres`.
 - `AGENTLENS_STORAGE_BACKEND`: `memory` for local fallback or `postgres` for hosted durable state.
 - `AGENTLENS_CORS_ORIGINS`: comma-separated frontend origins allowed to call the backend.
 - `AGENTLENS_PROJECT_ROOT`: repo path used by hosted demo sessions and risk/dependency scanning.
+- `AGENTLENS_DISABLE_HOOKS`: `1` to make project-local Codex hooks exit immediately, useful when using `agentlens-codex-proxy`.
 - `AGENTLENS_ENFORCE_APPROVALS`: `1` to make Codex hooks fail blocked/timed-out gates, `0` for mirror-only mode.
 - `AGENTLENS_APPROVAL_TIMEOUT_SECONDS`: seconds a hook waits for a pending dashboard decision.
 

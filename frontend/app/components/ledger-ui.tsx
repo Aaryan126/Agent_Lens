@@ -1,0 +1,1331 @@
+"use client";
+
+import { useMemo, useState, type ReactNode } from "react";
+import {
+  type ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type SortingState,
+} from "@tanstack/react-table";
+import {
+  AlertTriangle,
+  BarChart3,
+  Bell,
+  Blocks,
+  CheckCircle2,
+  ChevronDown,
+  ClipboardList,
+  FileText,
+  GitBranch,
+  Info,
+  Network,
+  Search,
+  ShieldAlert,
+  ShieldCheck,
+  SlidersHorizontal,
+  Terminal,
+  XCircle,
+} from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
+  Background,
+  Controls,
+  ReactFlow,
+  type Edge,
+  type Node,
+  Position,
+} from "@xyflow/react";
+
+import type {
+  CountBucket,
+  DemoResponse,
+  ExplainMoreResponse,
+  Gate,
+  GateStatus,
+  HealthState,
+  LedgerAnalytics,
+  RiskLevel,
+  SessionSummary,
+  SlackSendResult,
+  TraceEvent,
+  View,
+} from "../types";
+import {
+  formatPercent,
+  gateTarget,
+  healthLabel,
+  isInspectionGate,
+  isInspectionTrace,
+  riskChip,
+  riskDot,
+  sessionLabel,
+  shortId,
+  statusChip,
+  summarizeTrace,
+  titleCase,
+  toolLabel,
+} from "../utils";
+
+type GateRow = {
+  id: string;
+  risk: RiskLevel;
+  action: string;
+  target: string;
+  policy: string;
+  status: GateStatus;
+  confidence: number;
+  gate: Gate;
+  trace?: TraceEvent;
+};
+
+const navItems: { id: View; label: string; icon: ReactNode }[] = [
+  { id: "review", label: "Review Queue", icon: <ClipboardList size={16} /> },
+  { id: "trajectory", label: "Trajectory", icon: <GitBranch size={16} /> },
+  { id: "policies", label: "Policy Ledger", icon: <SlidersHorizontal size={16} /> },
+  { id: "slack", label: "Slack Surface", icon: <Bell size={16} /> },
+  { id: "audit", label: "Audit Events", icon: <FileText size={16} /> },
+];
+
+const chartColors: Record<string, string> = {
+  low: "#10b981",
+  medium: "#f59e0b",
+  high: "#ea580c",
+  critical: "#dc2626",
+  pending: "#0ea5e9",
+  approved: "#10b981",
+  blocked: "#dc2626",
+  modified: "#8b5cf6",
+  auto_executed: "#737373",
+};
+
+export function AppShell({
+  activeView,
+  onView,
+  health,
+  apiHost,
+  recentSessions,
+  activeSessionId,
+  pinnedSessionId,
+  slackChannel,
+  slackLoading,
+  onSwitchSession,
+  onFollowLatest,
+  onSlackChannel,
+  onSendSlack,
+  children,
+}: {
+  activeView: View;
+  onView: (view: View) => void;
+  health: HealthState;
+  apiHost: string;
+  recentSessions: SessionSummary[];
+  activeSessionId: string | null;
+  pinnedSessionId: string | null;
+  slackChannel: string;
+  slackLoading: boolean;
+  onSwitchSession: (sessionId: string) => void;
+  onFollowLatest: () => void;
+  onSlackChannel: (value: string) => void;
+  onSendSlack: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <main className="min-h-screen bg-[#f4f4f1] text-neutral-950">
+      <div className="grid min-h-screen lg:grid-cols-[276px_minmax(0,1fr)]">
+        <aside className="hidden border-r border-neutral-800 bg-neutral-950 text-white lg:flex lg:flex-col">
+          <div className="border-b border-neutral-800 px-6 py-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-md border border-neutral-700 bg-neutral-900">
+                <ShieldCheck size={18} />
+              </div>
+              <div>
+                <p className="text-lg font-semibold leading-none">AgentLens</p>
+                <p className="mt-2 text-xs uppercase tracking-wide text-neutral-500">Session Ledger</p>
+              </div>
+            </div>
+          </div>
+          <nav className="flex flex-1 flex-col gap-1 px-3 py-4 text-sm">
+            {navItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => onView(item.id)}
+                className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-left transition ${
+                  activeView === item.id
+                    ? "bg-white text-neutral-950"
+                    : "text-neutral-400 hover:bg-neutral-900 hover:text-white"
+                }`}
+              >
+                {item.icon}
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+          <div className="border-t border-neutral-800 p-4">
+            <StatusLine label="Backend" value={healthLabel(health)} ok={health === "online"} />
+            <StatusLine label="Primary Surface" value="Codex Native TUI" ok />
+            <StatusLine label="Ambient Surface" value="Slack Ready" ok />
+          </div>
+        </aside>
+
+        <section className="min-w-0">
+          <header className="border-b border-neutral-200 bg-white">
+            <div className="mx-auto flex max-w-[1720px] flex-col gap-4 px-5 py-4 xl:flex-row xl:items-center xl:justify-between xl:px-8">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge label="Ledger Mode" tone="neutral" />
+                  <Badge label={healthLabel(health)} tone={health === "online" ? "green" : "amber"} />
+                  <span className="truncate text-xs font-medium text-neutral-500">{apiHost}</span>
+                </div>
+                <h1 className="mt-2 text-[26px] font-semibold leading-tight tracking-normal">
+                  Agent Session Ledger
+                </h1>
+                <p className="mt-1 max-w-3xl text-sm leading-6 text-neutral-600">
+                  Replay Codex actions, inspect risk evidence, and explain every human decision.
+                </p>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-[minmax(230px,340px)_124px_170px_120px]">
+                <select
+                  value={activeSessionId ?? ""}
+                  onChange={(event) => onSwitchSession(event.target.value)}
+                  className="h-10 min-w-0 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium outline-none focus:border-neutral-950"
+                  aria-label="Active AgentLens session"
+                >
+                  <option value="" disabled>
+                    No active session
+                  </option>
+                  {recentSessions.map((session) => (
+                    <option key={session.id} value={session.id}>
+                      {sessionLabel(session)}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={onFollowLatest}
+                  className={`h-10 whitespace-nowrap rounded-md border px-3 text-sm font-semibold ${
+                    pinnedSessionId
+                      ? "border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
+                      : "border-neutral-300 bg-white text-neutral-500"
+                  }`}
+                >
+                  {pinnedSessionId ? "Follow Latest" : "Following"}
+                </button>
+                <input
+                  value={slackChannel}
+                  onChange={(event) => onSlackChannel(event.target.value)}
+                  className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium outline-none focus:border-neutral-950"
+                  aria-label="Slack channel ID"
+                />
+                <button
+                  onClick={onSendSlack}
+                  disabled={slackLoading}
+                  className="h-10 whitespace-nowrap rounded-md border border-neutral-300 bg-white px-4 text-sm font-semibold text-neutral-900 hover:border-neutral-950 disabled:cursor-not-allowed disabled:text-neutral-400"
+                >
+                  {slackLoading ? "Sending" : "Send To Slack"}
+                </button>
+              </div>
+            </div>
+          </header>
+
+          <div className="mx-auto flex max-w-[1720px] flex-col gap-4 px-5 py-5 xl:px-8">
+            {children}
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+}
+
+export function ReviewLedger({
+  demo,
+  gates,
+  traces,
+  selectedGate,
+  traceByProposal,
+  analytics,
+  trustScore,
+  apiUrl,
+  localGuardMode,
+  decisionNote,
+  explain,
+  explainLoading,
+  explainError,
+  onSelectGate,
+  onDecisionNote,
+  onDecision,
+  onExplain,
+}: {
+  demo: DemoResponse | null;
+  gates: Gate[];
+  traces: TraceEvent[];
+  selectedGate: Gate | null;
+  traceByProposal: Map<string, TraceEvent>;
+  analytics: LedgerAnalytics | null;
+  trustScore: number | null;
+  apiUrl: string;
+  localGuardMode: boolean;
+  decisionNote: string;
+  explain: ExplainMoreResponse | null;
+  explainLoading: boolean;
+  explainError: string | null;
+  onSelectGate: (id: string) => void;
+  onDecisionNote: (value: string) => void;
+  onDecision: (gate: Gate, action: "approve" | "block" | "modify") => Promise<void>;
+  onExplain: (gate: Gate) => Promise<void>;
+}) {
+  return (
+    <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_440px]">
+      <div className="flex min-w-0 flex-col gap-4">
+        <SectionHeader
+          eyebrow="Session Ledger"
+          title="Decision Queue"
+          body={
+            demo
+              ? demo.session.original_instruction
+              : "AgentLens is connected and waiting for Codex activity."
+          }
+        />
+        {gates.length === 0 ? (
+          <EmptyQueue sessionId={demo?.session.id ?? null} apiUrl={apiUrl} localGuardMode={localGuardMode} />
+        ) : (
+          <GateTable
+            gates={gates}
+            selectedGate={selectedGate}
+            traceByProposal={traceByProposal}
+            onSelectGate={onSelectGate}
+          />
+        )}
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+          <TimelineLedger traces={traces} gates={gates} />
+          <LedgerAnalyticsPanel analytics={analytics} trustScore={trustScore} />
+        </div>
+      </div>
+
+      <GateInspector
+        gate={selectedGate}
+        trace={selectedGate ? traceByProposal.get(selectedGate.proposal_id) : undefined}
+        decisionNote={decisionNote}
+        explain={explain}
+        explainLoading={explainLoading}
+        explainError={explainError}
+        onDecisionNote={onDecisionNote}
+        onDecision={onDecision}
+        onExplain={onExplain}
+      />
+    </section>
+  );
+}
+
+export function GateTable({
+  gates,
+  selectedGate,
+  traceByProposal,
+  onSelectGate,
+}: {
+  gates: Gate[];
+  selectedGate: Gate | null;
+  traceByProposal: Map<string, TraceEvent>;
+  onSelectGate: (id: string) => void;
+}) {
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const inspectionGates = gates.filter((gate) =>
+    isInspectionGate(gate, traceByProposal.get(gate.proposal_id)),
+  );
+  const rows = useMemo<GateRow[]>(
+    () =>
+      gates
+        .filter((gate) => !isInspectionGate(gate, traceByProposal.get(gate.proposal_id)))
+        .map((gate) => {
+          const trace = traceByProposal.get(gate.proposal_id);
+          return {
+            id: gate.id,
+            risk: gate.risk_assessment.risk_level,
+            action: toolLabel(trace?.tool_name),
+            target: gateTarget(gate, trace),
+            policy: gate.policy_decision.matched_policy ?? "Semantic Risk",
+            status: gate.status,
+            confidence: gate.intelligence_card?.confidence ?? 0,
+            gate,
+            trace,
+          };
+        })
+        .sort((a, b) => Number(b.status === "pending") - Number(a.status === "pending")),
+    [gates, traceByProposal],
+  );
+  const columns = useMemo<ColumnDef<GateRow>[]>(
+    () => [
+      {
+        accessorKey: "risk",
+        header: "Risk",
+        cell: ({ row }) => <RiskCell risk={row.original.risk} />,
+      },
+      {
+        accessorKey: "target",
+        header: "Action",
+        cell: ({ row }) => (
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-neutral-950">
+              {row.original.action} on {row.original.target}
+            </p>
+            <p className="mt-1 line-clamp-1 text-xs leading-5 text-neutral-500">
+              {row.original.gate.intelligence_card?.summary
+                ?? row.original.trace?.stated_reason
+                ?? "No summary available."}
+            </p>
+          </div>
+        ),
+      },
+      {
+        accessorKey: "policy",
+        header: "Policy",
+        cell: ({ row }) => <span className="text-sm text-neutral-600">{row.original.policy}</span>,
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: ({ row }) => <StatusBadge status={row.original.status} />,
+      },
+      {
+        accessorKey: "confidence",
+        header: "Confidence",
+        cell: ({ row }) => (
+          <span className="text-sm font-semibold">{Math.round(row.original.confidence * 100)}%</span>
+        ),
+      },
+    ],
+    [],
+  );
+  const table = useReactTable({
+    data: rows,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+
+  return (
+    <section className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Gate Queue</p>
+          <p className="mt-1 text-sm text-neutral-600">Pending decisions stay visible until resolved.</p>
+        </div>
+        <Search className="text-neutral-400" size={18} />
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[920px] border-collapse text-left">
+          <thead className="bg-neutral-50 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+            {table.getHeaderGroups().map((headerGroup) => (
+              <tr key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <th key={header.id} className="border-b border-neutral-200 px-4 py-3">
+                    {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                  </th>
+                ))}
+              </tr>
+            ))}
+          </thead>
+          <tbody>
+            {inspectionGates.length > 0 ? (
+              <tr>
+                <td className="border-b border-neutral-100 px-4 py-4" colSpan={5}>
+                  <div className="grid gap-3 md:grid-cols-[130px_minmax(0,1fr)_140px_120px] md:items-center">
+                    <RiskCell risk="low" />
+                    <div>
+                      <p className="text-sm font-semibold">Auto-Executed Inspection Batch</p>
+                      <p className="mt-1 text-xs text-neutral-500">
+                        {inspectionGates.length} read-only shell/file inspection calls collapsed.
+                      </p>
+                    </div>
+                    <StatusBadge status="auto_executed" />
+                    <span className="text-sm font-semibold">Low</span>
+                  </div>
+                </td>
+              </tr>
+            ) : null}
+            {table.getRowModel().rows.map((row) => (
+              <tr
+                key={row.id}
+                onClick={() => onSelectGate(row.original.id)}
+                className={`cursor-pointer border-b border-neutral-100 transition last:border-b-0 hover:bg-neutral-50 ${
+                  selectedGate?.id === row.original.id ? "bg-sky-50/70 shadow-[inset_3px_0_0_#0ea5e9]" : ""
+                }`}
+              >
+                {row.getVisibleCells().map((cell) => (
+                  <td key={cell.id} className="px-4 py-4 align-middle">
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+export function GateInspector({
+  gate,
+  trace,
+  decisionNote,
+  explain,
+  explainLoading,
+  explainError,
+  onDecisionNote,
+  onDecision,
+  onExplain,
+}: {
+  gate: Gate | null;
+  trace: TraceEvent | undefined;
+  decisionNote: string;
+  explain: ExplainMoreResponse | null;
+  explainLoading: boolean;
+  explainError: string | null;
+  onDecisionNote: (value: string) => void;
+  onDecision: (gate: Gate, action: "approve" | "block" | "modify") => Promise<void>;
+  onExplain: (gate: Gate) => Promise<void>;
+}) {
+  if (!gate) {
+    return (
+      <aside className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
+        <PanelTitle eyebrow="Inspector" title="No Gate Selected" icon={<Info size={18} />} />
+        <p className="mt-4 text-sm leading-6 text-neutral-600">
+          Select a gate to inspect risk, trajectory, drift, policy, dependencies, and decision history.
+        </p>
+        <div className="mt-6 grid gap-2">
+          <Fact label="Review Surface" value="Codex Native + Slack" />
+          <Fact label="Ledger Mode" value="Pinned Sessions" />
+          <Fact label="Strict Path" value="App-Server Proxy" />
+        </div>
+      </aside>
+    );
+  }
+
+  const card = gate.intelligence_card;
+  const canDecide = gate.status === "pending";
+  return (
+    <aside className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm xl:sticky xl:top-5 xl:self-start">
+      <div className="flex items-start justify-between gap-4">
+        <PanelTitle
+          eyebrow="Inspector"
+          title={toolLabel(trace?.tool_name)}
+          body={gateTarget(gate, trace)}
+          icon={<ShieldAlert size={18} />}
+        />
+        <StatusBadge status={gate.status} />
+      </div>
+
+      <div className="mt-5 grid grid-cols-3 gap-2">
+        <Fact label="Risk" value={titleCase(gate.risk_assessment.risk_level)} />
+        <Fact label="Blast" value={titleCase(gate.risk_assessment.blast_radius)} />
+        <Fact label="Confidence" value={formatPercent(card?.confidence)} />
+      </div>
+
+      <Section title="Recommendation">
+        <p>{card?.summary ?? "No intelligence summary available."}</p>
+      </Section>
+
+      <Section title="Policy Match">
+        <div className="grid gap-2">
+          <Fact label="Decision" value={titleCase(gate.policy_decision.action)} />
+          <Fact label="Matched Policy" value={gate.policy_decision.matched_policy ?? "Semantic Risk"} />
+          <p className="text-sm leading-6 text-neutral-600">{gate.policy_decision.reason}</p>
+        </div>
+      </Section>
+
+      <Section title="Trajectory">
+        <p>{card?.trajectory_preview ?? "No trajectory preview available."}</p>
+        {card?.full_trajectory?.next_steps?.length ? (
+          <ol className="mt-3 flex flex-col gap-2">
+            {card.full_trajectory.next_steps.map((step) => (
+              <li key={`${step.step}-${step.action}`} className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                  Step {step.step}
+                </span>
+                <p className="mt-1 text-sm font-semibold text-neutral-950">{step.action}</p>
+                <p className="mt-1 text-xs leading-5 text-neutral-600">{step.rationale}</p>
+              </li>
+            ))}
+          </ol>
+        ) : null}
+      </Section>
+
+      <Section title="Dependency Graph">
+        <DependencyGraph gate={gate} />
+      </Section>
+
+      <Section title="Why Confidence Changed">
+        <ConfidenceFactors gate={gate} />
+      </Section>
+
+      <Section title="Risk Evidence">
+        <ul className="flex flex-col gap-2">
+          {gate.risk_assessment.evidence.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      </Section>
+
+      {gate.human_reason ? (
+        <Section title="Decision History">
+          <p>{gate.human_reason}</p>
+        </Section>
+      ) : null}
+
+      <div className="mt-5 grid gap-2">
+        <button
+          onClick={() => onExplain(gate)}
+          className="h-10 rounded-md border border-neutral-300 text-sm font-semibold text-neutral-900 hover:border-neutral-950"
+        >
+          {explainLoading ? "Loading Explanation" : "Explain More"}
+        </button>
+        {explainError ? <p className="text-xs leading-5 text-red-700">{explainError}</p> : null}
+      </div>
+
+      {explain ? <ExplainMorePanel explain={explain} trace={trace} /> : null}
+
+      {canDecide ? (
+        <>
+          <label className="mt-5 block text-xs font-semibold uppercase tracking-wide text-neutral-500" htmlFor="decision-note">
+            Gate Decision Note
+          </label>
+          <input
+            id="decision-note"
+            value={decisionNote}
+            onChange={(event) => onDecisionNote(event.target.value)}
+            className="mt-2 h-10 w-full rounded-md border border-neutral-300 px-3 text-sm outline-none focus:border-neutral-950"
+          />
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <DecisionButton tone="approve" onClick={() => onDecision(gate, "approve")}>Approve</DecisionButton>
+            <DecisionButton tone="block" onClick={() => onDecision(gate, "block")}>Block</DecisionButton>
+            <DecisionButton tone="modify" onClick={() => onDecision(gate, "modify")}>Modify</DecisionButton>
+          </div>
+          <p className="mt-3 text-xs leading-5 text-neutral-500">
+            In app-server proxy mode, Codex is waiting for this decision before the approval response is returned.
+          </p>
+        </>
+      ) : (
+        <p className="mt-5 border-t border-neutral-200 pt-4 text-xs leading-5 text-neutral-500">
+          This gate is resolved in the AgentLens ledger.
+        </p>
+      )}
+    </aside>
+  );
+}
+
+function ExplainMorePanel({ explain, trace }: { explain: ExplainMoreResponse; trace?: TraceEvent }) {
+  const [question, setQuestion] = useState("");
+  const answer = answerExplainQuestion(question, explain);
+  return (
+    <section className="mt-5 rounded-lg border border-neutral-200 bg-neutral-50 p-4">
+      <div className="flex items-center gap-2">
+        <Info size={16} className="text-sky-700" />
+        <p className="text-sm font-semibold">Expanded Explanation</p>
+      </div>
+      <p className="mt-3 text-sm leading-6 text-neutral-700">
+        {explain.summary ?? explain.context_summary}
+      </p>
+      {explain.suggested_modification ? (
+        <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-900">Safer Modification</p>
+          <p className="mt-1 text-sm leading-6 text-amber-950">{explain.suggested_modification}</p>
+        </div>
+      ) : null}
+      <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-500" htmlFor="explain-question">
+        Ask About This Gate
+      </label>
+      <input
+        id="explain-question"
+        value={question}
+        onChange={(event) => setQuestion(event.target.value)}
+        placeholder="Why is this risky?"
+        className="mt-2 h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm outline-none focus:border-neutral-950"
+      />
+      {question.trim() ? (
+        <p className="mt-2 rounded-md border border-neutral-200 bg-white p-3 text-sm leading-6 text-neutral-700">
+          {answer}
+        </p>
+      ) : null}
+      <details className="mt-4">
+        <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-neutral-500">
+          Raw Tool Payload
+        </summary>
+        <pre className="mt-2 max-h-56 overflow-auto rounded-md bg-neutral-950 p-3 text-xs leading-5 text-neutral-100">
+{JSON.stringify(
+  {
+    gate_id: explain.gate_id,
+    tool_name: trace?.tool_name,
+    stated_reason: trace?.stated_reason,
+    params: trace?.params,
+  },
+  null,
+  2,
+)}
+        </pre>
+      </details>
+    </section>
+  );
+}
+
+export function DependencyGraph({ gate }: { gate: Gate }) {
+  const evidence = gate.intelligence_card?.dependency_evidence ?? [];
+  const primary = evidence[0];
+  if (!primary) {
+    return (
+      <div className="rounded-md border border-dashed border-neutral-300 bg-neutral-50 p-3 text-sm text-neutral-600">
+        No dependency references were recorded for this action.
+      </div>
+    );
+  }
+  const referenced = primary.referenced_by.slice(0, 8);
+  const config = primary.config_references.slice(0, 4);
+  const nodes: Node[] = [
+    {
+      id: "target",
+      position: { x: 260, y: 90 },
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left,
+      data: { label: primary.path },
+      className: "rounded-md border border-neutral-950 bg-white px-3 py-2 text-xs font-semibold shadow-sm",
+    },
+    ...referenced.map((path, index) => ({
+      id: `code-${index}`,
+      position: { x: 20, y: index * 62 },
+      sourcePosition: Position.Right,
+      data: { label: path },
+      className: "rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-950",
+    })),
+    ...config.map((path, index) => ({
+      id: `config-${index}`,
+      position: { x: 520, y: index * 62 },
+      targetPosition: Position.Left,
+      data: { label: path },
+      className: "rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950",
+    })),
+  ];
+  const edges: Edge[] = [
+    ...referenced.map((_, index) => ({ id: `code-edge-${index}`, source: `code-${index}`, target: "target" })),
+    ...config.map((_, index) => ({ id: `config-edge-${index}`, source: "target", target: `config-${index}` })),
+  ];
+  return (
+    <div>
+      <div className="h-64 overflow-hidden rounded-md border border-neutral-200 bg-white">
+        <ReactFlow nodes={nodes} edges={edges} fitView nodesDraggable={false} nodesConnectable={false} elementsSelectable={false}>
+          <Background gap={18} size={1} />
+          <Controls showInteractive={false} />
+        </ReactFlow>
+      </div>
+      <p className="mt-2 text-xs leading-5 text-neutral-500">{primary.summary}</p>
+      {primary.referenced_by.length + primary.config_references.length > referenced.length + config.length ? (
+        <p className="mt-1 text-xs font-semibold text-neutral-600">
+          +{primary.referenced_by.length + primary.config_references.length - referenced.length - config.length} more references.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+export function LedgerAnalyticsPanel({
+  analytics,
+  trustScore,
+}: {
+  analytics: LedgerAnalytics | null;
+  trustScore: number | null;
+}) {
+  return (
+    <Panel>
+      <div className="flex items-start justify-between gap-3">
+        <PanelTitle eyebrow="Audit Intelligence" title="Ledger Analytics" icon={<BarChart3 size={18} />} />
+        <p className="text-3xl font-semibold leading-none">{trustScore === null ? "--" : `${trustScore}%`}</p>
+      </div>
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <ChartBlock title="Approval Patterns">
+          <BucketBarChart buckets={analytics?.approval_patterns ?? []} />
+        </ChartBlock>
+        <ChartBlock title="Risk Distribution">
+          <BucketBarChart buckets={analytics?.risk_distribution ?? []} />
+        </ChartBlock>
+      </div>
+      <div className="mt-4 rounded-md border border-neutral-200 bg-neutral-50 p-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Trust Score Basis</p>
+        <p className="mt-2 text-sm leading-6 text-neutral-700">
+          {analytics
+            ? `${analytics.trust_score.auto_executed} actions auto-executed, ${analytics.trust_score.human_interventions} required human intervention.`
+            : "No actions recorded yet."}
+        </p>
+      </div>
+    </Panel>
+  );
+}
+
+function BucketBarChart({ buckets }: { buckets: CountBucket[] }) {
+  if (buckets.length === 0) {
+    return <p className="flex h-full items-center text-sm text-neutral-500">No records yet.</p>;
+  }
+  const data = buckets.map((bucket) => ({ ...bucket, label: titleCase(bucket.name) }));
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data} layout="vertical" margin={{ left: 4, right: 12, top: 8, bottom: 8 }}>
+        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e5e5" />
+        <XAxis type="number" allowDecimals={false} hide />
+        <YAxis type="category" dataKey="label" width={92} tick={{ fontSize: 11 }} />
+        <Tooltip />
+        <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+          {data.map((entry) => (
+            <Cell key={entry.name} fill={chartColors[entry.name] ?? "#171717"} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+export function ConfidenceFactors({ gate }: { gate: Gate }) {
+  const factors = gate.intelligence_card?.confidence_evidence ?? [];
+  if (factors.length === 0) {
+    return <p>No confidence factors were recorded.</p>;
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      {factors.map((item) => (
+        <div key={`${item.label}-${item.detail}`} className="grid grid-cols-[58px_minmax(0,1fr)] gap-3">
+          <span className={item.impact >= 0 ? "text-sm font-semibold text-emerald-700" : "text-sm font-semibold text-red-700"}>
+            {item.impact >= 0 ? "+" : ""}
+            {Math.round(item.impact * 100)}
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-neutral-950">{item.label}</span>
+            <span className="block text-xs leading-5 text-neutral-600">{item.detail}</span>
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function TrajectoryView({ gates, traces, traceByProposal }: { gates: Gate[]; traces: TraceEvent[]; traceByProposal: Map<string, TraceEvent> }) {
+  return (
+    <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <Panel>
+        <PanelTitle eyebrow="Counterfactual Engine" title="Predicted Agent Direction" icon={<GitBranch size={18} />} />
+        {gates.length === 0 ? (
+          <EmptyState title="No trajectory yet" body="Use Codex normally. AgentLens will record trajectory once a gate appears." />
+        ) : (
+          <div className="mt-5 grid gap-3">
+            {gates.map((gate, index) => (
+              <TrajectoryCard key={gate.id} gate={gate} trace={traceByProposal.get(gate.proposal_id)} step={index + 1} />
+            ))}
+          </div>
+        )}
+      </Panel>
+      <TimelineLedger traces={traces} gates={gates} compact />
+    </section>
+  );
+}
+
+export function PolicyLedgerView({ gates }: { gates: Gate[] }) {
+  const rows = gates.length
+    ? gates.map((gate) => ({
+        name: gate.policy_decision.matched_policy ?? "Semantic Risk Recommendation",
+        condition: gate.policy_decision.reason,
+        action: titleCase(gate.policy_decision.action),
+        risk: gate.risk_assessment.risk_level,
+        status: gate.status,
+      }))
+    : [
+        {
+          name: "Auto-Approve Safe Reads",
+          condition: "Read-only file and inspection calls",
+          action: "Auto Execute",
+          risk: "low" as RiskLevel,
+          status: "auto_executed" as GateStatus,
+        },
+        {
+          name: "Review Gated Writes",
+          condition: "Tracked source changes with medium reversibility",
+          action: "Require Approval",
+          risk: "medium" as RiskLevel,
+          status: "pending" as GateStatus,
+        },
+        {
+          name: "Protect Migrations",
+          condition: "Database migrations, deployment, and destructive operations",
+          action: "Block And Alert",
+          risk: "critical" as RiskLevel,
+          status: "blocked" as GateStatus,
+        },
+      ];
+  return (
+    <Panel>
+      <PanelTitle
+        eyebrow="Policy Ledger"
+        title="Standing Rules And Runtime Matches"
+        body="Current policy matches are shown from session history. Editable policy management is the next phase."
+        icon={<SlidersHorizontal size={18} />}
+      />
+      <div className="mt-5 overflow-x-auto rounded-lg border border-neutral-200">
+        <table className="w-full min-w-[820px] text-left">
+          <thead className="bg-neutral-50 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+            <tr>
+              <th className="border-b border-neutral-200 px-4 py-3">Rule</th>
+              <th className="border-b border-neutral-200 px-4 py-3">Condition</th>
+              <th className="border-b border-neutral-200 px-4 py-3">Decision</th>
+              <th className="border-b border-neutral-200 px-4 py-3">Risk</th>
+              <th className="border-b border-neutral-200 px-4 py-3">Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr key={`${row.name}-${index}`} className="border-b border-neutral-100 last:border-b-0">
+                <td className="px-4 py-4 text-sm font-semibold">{row.name}</td>
+                <td className="px-4 py-4 text-sm text-neutral-600">{row.condition}</td>
+                <td className="px-4 py-4 text-sm font-medium">{row.action}</td>
+                <td className="px-4 py-4"><RiskBadge risk={row.risk} /></td>
+                <td className="px-4 py-4"><StatusBadge status={row.status} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
+  );
+}
+
+export function SlackSurfaceView({
+  channel,
+  result,
+  loading,
+  onChannel,
+  onSend,
+}: {
+  channel: string;
+  result: SlackSendResult | null;
+  loading: boolean;
+  onChannel: (value: string) => void;
+  onSend: () => void;
+}) {
+  return (
+    <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <Panel>
+        <PanelTitle
+          eyebrow="Ambient Surface"
+          title="Slack Approval Delivery"
+          body="Slack remains the implemented push surface for people who are not watching the ledger."
+          icon={<Bell size={18} />}
+        />
+        <div className="mt-5 grid gap-3 md:grid-cols-[240px_auto]">
+          <input
+            value={channel}
+            onChange={(event) => onChannel(event.target.value)}
+            className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium outline-none focus:border-neutral-950"
+            aria-label="Slack channel ID"
+          />
+          <button
+            onClick={onSend}
+            disabled={loading}
+            className="h-10 w-fit rounded-md bg-neutral-950 px-4 text-sm font-semibold text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-400"
+          >
+            {loading ? "Sending Cards" : "Send Pending Cards"}
+          </button>
+        </div>
+        <div className="mt-6 grid gap-3 md:grid-cols-3">
+          <SurfaceStep icon={<ShieldAlert size={16} />} title="Gate Triggered" body="Risky action enters review." />
+          <SurfaceStep icon={<Bell size={16} />} title="Slack Posted" body="Human receives concise context." />
+          <SurfaceStep icon={<CheckCircle2 size={16} />} title="Ledger Updated" body="Decision becomes replayable." />
+        </div>
+      </Panel>
+      <Panel>
+        <PanelTitle eyebrow="Delivery Status" title={result ? "Cards Posted" : "No Cards Sent"} icon={<Network size={18} />} />
+        {result ? (
+          <div className="mt-5 grid gap-3">
+            <Fact label="Session" value={shortId(result.session_id)} />
+            <Fact label="Cards" value={String(result.posted.length)} />
+            <Fact label="Channel" value={result.posted[0]?.channel ?? channel} />
+          </div>
+        ) : (
+          <p className="mt-5 text-sm leading-6 text-neutral-600">
+            Send cards after creating a session, or use this action to create a backend-owned approval session.
+          </p>
+        )}
+      </Panel>
+    </section>
+  );
+}
+
+export function AuditEventsView({
+  gates,
+  traces,
+  analytics,
+  trustScore,
+}: {
+  gates: Gate[];
+  traces: TraceEvent[];
+  analytics: LedgerAnalytics | null;
+  trustScore: number | null;
+}) {
+  return (
+    <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+      <Panel>
+        <PanelTitle
+          eyebrow="Audit Events"
+          title="Session Replay"
+          body="Every trace, policy decision, and human action is rendered as an audit record."
+          icon={<FileText size={18} />}
+        />
+        <div className="mt-5 grid gap-3">
+          {traces.length === 0 && gates.length === 0 ? (
+            <EmptyState title="No audit events yet" body="Start a Codex session to populate the ledger." />
+          ) : null}
+          {traces.map((trace, index) => (
+            <LedgerRow
+              key={trace.id}
+              label={`Trace ${index + 1}`}
+              title={toolLabel(trace.tool_name)}
+              body={trace.stated_reason ?? summarizeTrace(trace)}
+            />
+          ))}
+          {gates.map((gate) => (
+            <LedgerRow
+              key={gate.id}
+              label={titleCase(gate.status)}
+              title={`${titleCase(gate.risk_assessment.risk_level)} risk gate`}
+              body={gate.intelligence_card?.summary ?? gate.policy_decision.reason}
+            />
+          ))}
+        </div>
+      </Panel>
+      <LedgerAnalyticsPanel analytics={analytics} trustScore={trustScore} />
+    </section>
+  );
+}
+
+export function MetricsStrip({ gates, traces, analytics, trustScore, sessionId }: { gates: Gate[]; traces: TraceEvent[]; analytics: LedgerAnalytics | null; trustScore: number | null; sessionId: string | null }) {
+  const pending = gates.filter((gate) => gate.status === "pending").length;
+  const resolved = gates.filter((gate) => gate.status !== "pending").length;
+  const critical = gates.filter((gate) => ["critical", "high"].includes(gate.risk_assessment.risk_level)).length;
+  return (
+    <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+      <Metric label="Session" value={sessionId ? shortId(sessionId) : "Idle"} icon={<Terminal size={16} />} />
+      <Metric label="Actions" value={String(traces.length)} icon={<Blocks size={16} />} />
+      <Metric label="Pending" value={String(pending)} accent="sky" icon={<AlertTriangle size={16} />} />
+      <Metric label="Resolved" value={String(resolved)} accent="green" icon={<CheckCircle2 size={16} />} />
+      <Metric label="High Risk" value={String(critical)} accent={critical ? "red" : "neutral"} icon={<ShieldAlert size={16} />} />
+      <Metric label="Trust" value={trustScore === null ? "--" : `${trustScore}%`} icon={<BarChart3 size={16} />} sublabel={analytics ? `${analytics.trust_score.total_actions} actions` : undefined} />
+    </section>
+  );
+}
+
+function TimelineLedger({ traces, gates, compact = false }: { traces: TraceEvent[]; gates: Gate[]; compact?: boolean }) {
+  const inspectionTraces = traces.filter((trace) => isInspectionTrace(trace));
+  const visibleTraces = traces.filter((trace) => !isInspectionTrace(trace));
+  return (
+    <Panel>
+      <PanelTitle eyebrow="Trace Capture" title="Execution Timeline" icon={<Terminal size={18} />} small={compact} />
+      <div className="mt-4 flex flex-col gap-3">
+        {traces.length === 0 ? <p className="text-sm text-neutral-500">No intercepted tool calls yet.</p> : null}
+        {inspectionTraces.length > 0 ? (
+          <div className="border-l-2 border-emerald-300 pl-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Inspection Batch</p>
+            <p className="mt-1 text-sm leading-6 text-neutral-700">
+              {inspectionTraces.length} read-only commands captured and auto-executed.
+            </p>
+          </div>
+        ) : null}
+        {visibleTraces.map((trace, index) => (
+          <div key={trace.id} className="border-l-2 border-neutral-300 pl-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+              Step {index + 1} / {toolLabel(trace.tool_name)}
+            </p>
+            <p className="mt-1 text-sm leading-6 text-neutral-700">{trace.stated_reason || summarizeTrace(trace)}</p>
+          </div>
+        ))}
+        {gates.filter((gate) => gate.status !== "auto_executed").slice(-4).map((gate) => (
+          <div key={gate.id} className="border-l-2 border-sky-300 pl-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{titleCase(gate.status)} Gate</p>
+            <p className="mt-1 text-sm leading-6 text-neutral-700">{gate.intelligence_card?.summary ?? gate.policy_decision.reason}</p>
+          </div>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+function TrajectoryCard({ gate, trace, step }: { gate: Gate; trace: TraceEvent | undefined; step: number }) {
+  return (
+    <div className="grid gap-4 rounded-lg border border-neutral-200 bg-white p-4 md:grid-cols-[42px_minmax(0,1fr)_140px]">
+      <div className="flex h-9 w-9 items-center justify-center rounded-md bg-neutral-950 text-sm font-semibold text-white">{step}</div>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <RiskBadge risk={gate.risk_assessment.risk_level} />
+          <StatusBadge status={gate.status} />
+        </div>
+        <h3 className="mt-3 truncate text-base font-semibold">
+          {toolLabel(trace?.tool_name)} on {gateTarget(gate, trace)}
+        </h3>
+        <p className="mt-2 text-sm leading-6 text-neutral-600">
+          {gate.intelligence_card?.trajectory_preview ?? "No trajectory preview available."}
+        </p>
+      </div>
+      <div className="border-t border-neutral-200 pt-3 md:border-l md:border-t-0 md:pl-4 md:pt-0">
+        <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Confidence</p>
+        <p className="mt-1 text-2xl font-semibold">{formatPercent(gate.intelligence_card?.confidence)}</p>
+      </div>
+    </div>
+  );
+}
+
+function EmptyQueue({ sessionId, apiUrl, localGuardMode }: { sessionId: string | null; apiUrl: string; localGuardMode: boolean }) {
+  return (
+    <Panel>
+      <EmptyState
+        title={sessionId ? "Live session is listening" : "Waiting for Codex activity"}
+        body={
+          sessionId
+            ? localGuardMode
+              ? "Continue working in Codex. AgentLens will capture tool proposals into this ledger."
+              : "Run the local adapter to forward Codex events into this hosted review queue."
+            : "Start a Codex session through the local guard, terminal runner, or native proxy."
+        }
+      />
+      {!localGuardMode && sessionId ? (
+        <code className="mt-4 block overflow-x-auto rounded-md border border-neutral-200 bg-neutral-950 p-3 text-xs leading-6 text-neutral-100">
+          cd backend && uv run agentlens-codex --api-url {apiUrl} --repo /path/to/your/repo &quot;Inspect this repo&quot;
+        </code>
+      ) : null}
+    </Panel>
+  );
+}
+
+function answerExplainQuestion(question: string, explain: ExplainMoreResponse) {
+  const lower = question.toLowerCase();
+  if (lower.includes("risk") || lower.includes("danger")) {
+    return explain.risk.evidence[0] ?? explain.context_summary;
+  }
+  if (lower.includes("policy")) {
+    return `${explain.policy.matched_policy ?? "Semantic risk"} produced ${titleCase(explain.policy.action)} because ${explain.policy.reason}.`;
+  }
+  if (lower.includes("confidence")) {
+    return explain.confidence_evidence[0]?.detail ?? "No confidence factor was recorded for this gate.";
+  }
+  if (lower.includes("depend") || lower.includes("reference")) {
+    return explain.dependency_evidence[0]?.summary ?? "No dependency references were recorded for this gate.";
+  }
+  if (lower.includes("next") || lower.includes("trajectory")) {
+    return explain.trajectory?.next_steps[0]?.rationale ?? explain.trajectory?.rationale ?? "No trajectory was recorded.";
+  }
+  return explain.context_summary;
+}
+
+function SectionHeader({ eyebrow, title, body }: { eyebrow: string; title: string; body: string }) {
+  return (
+    <div className="border-b border-neutral-300 pb-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{eyebrow}</p>
+      <div className="mt-1 grid gap-3 xl:grid-cols-[230px_minmax(0,1fr)] xl:items-end">
+        <h2 className="text-2xl font-semibold leading-tight">{title}</h2>
+        <p className="max-w-3xl text-sm leading-6 text-neutral-600">{body}</p>
+      </div>
+    </div>
+  );
+}
+
+function Panel({ children }: { children: ReactNode }) {
+  return <section className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">{children}</section>;
+}
+
+function PanelTitle({
+  eyebrow,
+  title,
+  body,
+  icon,
+  small = false,
+}: {
+  eyebrow: string;
+  title: string;
+  body?: string;
+  icon?: ReactNode;
+  small?: boolean;
+}) {
+  return (
+    <div>
+      <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+        {icon}
+        {eyebrow}
+      </p>
+      <h2 className={`mt-1 font-semibold leading-tight ${small ? "text-lg" : "text-xl"}`}>{title}</h2>
+      {body ? <p className="mt-2 max-w-3xl text-sm leading-6 text-neutral-600">{body}</p> : null}
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="mt-5 border-t border-neutral-200 pt-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{title}</p>
+      <div className="mt-2 text-sm leading-6 text-neutral-700">{children}</div>
+    </section>
+  );
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border border-neutral-200 bg-neutral-50 p-3">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{label}</p>
+      <p className="mt-1 truncate text-sm font-semibold text-neutral-950">{value}</p>
+    </div>
+  );
+}
+
+function ChartBlock({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="h-52 rounded-md border border-neutral-200 bg-neutral-50 p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{title}</p>
+      <div className="mt-2 h-40">{children}</div>
+    </div>
+  );
+}
+
+function Metric({
+  label,
+  value,
+  sublabel,
+  accent = "neutral",
+  icon,
+}: {
+  label: string;
+  value: string;
+  sublabel?: string;
+  accent?: "neutral" | "green" | "sky" | "red";
+  icon: ReactNode;
+}) {
+  const styles = {
+    neutral: "border-neutral-200",
+    green: "border-emerald-300",
+    sky: "border-sky-300",
+    red: "border-red-300",
+  };
+  return (
+    <div className={`rounded-lg border bg-white px-4 py-3 shadow-sm ${styles[accent]}`}>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{label}</p>
+        <span className="text-neutral-400">{icon}</span>
+      </div>
+      <p className="mt-2 truncate text-2xl font-semibold leading-none">{value}</p>
+      {sublabel ? <p className="mt-1 text-xs text-neutral-500">{sublabel}</p> : null}
+    </div>
+  );
+}
+
+export function Notice({ tone, children }: { tone: "blue" | "red"; children: ReactNode }) {
+  const styles = {
+    blue: "border-sky-200 bg-sky-50 text-sky-900",
+    red: "border-red-200 bg-red-50 text-red-800",
+  };
+  return <div className={`rounded-lg border px-4 py-3 text-sm ${styles[tone]}`}>{children}</div>;
+}
+
+function RiskCell({ risk }: { risk: RiskLevel }) {
+  return (
+    <span className="flex items-center gap-2 text-sm font-semibold">
+      <span className={`h-2.5 w-2.5 rounded-full ${riskDot[risk]}`} />
+      {titleCase(risk)}
+    </span>
+  );
+}
+
+function RiskBadge({ risk }: { risk: RiskLevel }) {
+  return <span className={`w-fit rounded-full border px-2.5 py-1 text-xs font-semibold ${riskChip[risk]}`}>{titleCase(risk)}</span>;
+}
+
+function StatusBadge({ status }: { status: GateStatus }) {
+  const icon =
+    status === "blocked" ? <XCircle size={13} />
+    : status === "pending" ? <AlertTriangle size={13} />
+    : <CheckCircle2 size={13} />;
+  return (
+    <span className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${statusChip[status]}`}>
+      {icon}
+      {titleCase(status)}
+    </span>
+  );
+}
+
+function DecisionButton({ tone, onClick, children }: { tone: "approve" | "block" | "modify"; onClick: () => void; children: ReactNode }) {
+  const styles = {
+    approve: "bg-neutral-950 text-white hover:bg-neutral-800",
+    block: "border border-red-700 text-red-800 hover:bg-red-50",
+    modify: "border border-neutral-300 text-neutral-800 hover:border-neutral-950",
+  };
+  return (
+    <button onClick={onClick} className={`h-10 rounded-md text-sm font-semibold ${styles[tone]}`}>
+      {children}
+    </button>
+  );
+}
+
+function EmptyState({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 p-5">
+      <p className="font-semibold">{title}</p>
+      <p className="mt-2 text-sm leading-6 text-neutral-600">{body}</p>
+    </div>
+  );
+}
+
+function SurfaceStep({ icon, title, body }: { icon: ReactNode; title: string; body: string }) {
+  return (
+    <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
+      <p className="flex h-8 w-8 items-center justify-center rounded-md bg-neutral-950 text-white">{icon}</p>
+      <p className="mt-3 text-sm font-semibold">{title}</p>
+      <p className="mt-1 text-sm leading-5 text-neutral-600">{body}</p>
+    </div>
+  );
+}
+
+function LedgerRow({ label, title, body }: { label: string; title: string; body: string }) {
+  return (
+    <div className="grid gap-3 rounded-lg border border-neutral-200 bg-white p-4 md:grid-cols-[140px_minmax(0,1fr)]">
+      <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{label}</p>
+      <div className="min-w-0">
+        <p className="truncate text-sm font-semibold">{title}</p>
+        <p className="mt-1 line-clamp-2 text-sm leading-6 text-neutral-600">{body}</p>
+      </div>
+    </div>
+  );
+}
+
+function StatusLine({ label, value, ok }: { label: string; value: string; ok: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-2">
+      <div className="min-w-0">
+        <p className="text-xs uppercase tracking-wide text-neutral-500">{label}</p>
+        <p className="truncate text-sm text-neutral-200">{value}</p>
+      </div>
+      <span className={`h-2 w-2 shrink-0 rounded-full ${ok ? "bg-emerald-400" : "bg-amber-400"}`} />
+    </div>
+  );
+}
+
+function Badge({ label, tone }: { label: string; tone: "blue" | "green" | "amber" | "neutral" }) {
+  const styles = {
+    blue: "border-sky-200 bg-sky-50 text-sky-800",
+    green: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    amber: "border-amber-200 bg-amber-50 text-amber-800",
+    neutral: "border-neutral-200 bg-neutral-50 text-neutral-700",
+  };
+  return <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${styles[tone]}`}>{label}</span>;
+}

@@ -57,6 +57,17 @@ class AgentLensSession:
                 trajectory_preview="No trajectory generated because policy auto-executed this low-risk action.",
             )
             card.dependency_evidence = context.dependency_evidence
+        elif self._uses_fast_intelligence(proposal):
+            card = self.intelligence.fallback_card(
+                proposal,
+                risk,
+                trajectory_preview=(
+                    "Fast hook mirror mode recorded this action without running the full "
+                    "OpenAI trajectory pipeline."
+                ),
+            )
+            card.dependency_evidence = context.dependency_evidence
+            card.model_roles = {"summary": "deterministic_fast_hook"}
         else:
             card = self.intelligence.build_card(context)
 
@@ -181,3 +192,9 @@ class AgentLensSession:
         if files:
             return f"Inspect references for {files}, then propose the smallest reversible change."
         return "Ask the agent to restate the intended effect and provide a lower-risk command or patch."
+
+    def _uses_fast_intelligence(self, proposal: ToolCallProposal) -> bool:
+        return (
+            proposal.provider_metadata.get("fast_intelligence") is True
+            or proposal.provider_metadata.get("source") == "codex_hook"
+        )

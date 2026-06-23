@@ -49,6 +49,34 @@ def test_fallback_card_is_used_without_openai_key(tmp_path: Path, monkeypatch) -
     assert "OpenAI intelligence is configured" in gate.intelligence_card.trajectory_preview
 
 
+def test_hook_originated_pending_gate_uses_fast_card(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+
+    def fail_build_card(self, context):
+        raise AssertionError("hook proposals must not run full OpenAI card generation")
+
+    monkeypatch.setattr("agentlens.intelligence.IntelligenceLayer.build_card", fail_build_card)
+    storage = InMemoryStore()
+    session = AgentLensSession.start(
+        SessionStart(original_instruction="Mirror normal Codex TUI activity.", repo_path=str(tmp_path)),
+        storage=storage,
+    )
+
+    gate = session.propose(
+        ToolCallProposal(
+            session_id=session.session.id,
+            tool_name="fs.write",
+            params={"path": "README.md"},
+            provider_metadata={"source": "codex_hook", "fast_intelligence": True},
+        )
+    )
+
+    assert gate.status == "pending"
+    assert gate.intelligence_card is not None
+    assert gate.intelligence_card.model_roles == {"summary": "deterministic_fast_hook"}
+    assert "Fast hook mirror mode" in gate.intelligence_card.trajectory_preview
+
+
 def test_health_endpoint() -> None:
     client = TestClient(app)
     response = client.get("/health")
@@ -72,6 +100,27 @@ def test_latest_session_endpoint_returns_newest_session(tmp_path: Path) -> None:
     assert response.status_code == 200
     assert response.json()["id"] in {first["id"], second["id"]}
     assert response.json()["id"] == second["id"]
+
+
+def test_list_sessions_endpoint_returns_recent_sessions(tmp_path: Path) -> None:
+    client = TestClient(app)
+    first = client.post(
+        "/sessions",
+        json={"original_instruction": "First listed session.", "repo_path": str(tmp_path)},
+    ).json()
+    second = client.post(
+        "/sessions",
+        json={"original_instruction": "Second listed session.", "repo_path": str(tmp_path)},
+    ).json()
+
+    response = client.get("/sessions?limit=2")
+
+    assert response.status_code == 200
+    body = response.json()
+    ids = [session["id"] for session in body]
+    assert second["id"] in ids
+    assert first["id"] in ids
+    assert ids.index(second["id"]) < ids.index(first["id"])
 
 
 def test_demo_session_endpoint_creates_reviewable_gates(monkeypatch) -> None:

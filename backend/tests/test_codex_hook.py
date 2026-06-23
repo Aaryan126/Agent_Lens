@@ -15,6 +15,7 @@ def test_codex_hook_parses_bash_payload() -> None:
     assert proposal.tool_name == "shell.run"
     assert proposal.params == {"command": "sed -n '1,80p' prd.md"}
     assert proposal.provider_metadata["source"] == "codex_hook"
+    assert proposal.provider_metadata["fast_intelligence"] is True
 
 
 def test_codex_hook_creates_session_and_posts(monkeypatch, tmp_path) -> None:

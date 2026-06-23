@@ -82,6 +82,12 @@ def create_session(payload: SessionStart):
     return session.session
 
 
+@app.get("/sessions")
+def list_sessions(limit: int = 20) -> list[Session]:
+    sessions = sorted(store.sessions.values(), key=lambda session: session.created_at, reverse=True)
+    return sessions[: max(1, min(limit, 100))]
+
+
 @app.get("/sessions/latest")
 def latest_session() -> Session:
     if not store.sessions:
