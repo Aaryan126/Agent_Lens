@@ -384,6 +384,8 @@ frontend `npm run build` passed. With network access allowed,
 `env -u AGENTLENS_DISABLE_HOOKS ./.venv/bin/pytest tests/test_openai_integration.py`
 reported 2 passed.
 
+Second follow-up status: Console UI layout, sidebar, topbar controls, and metrics boxes have been polished. Sidebar logo alignment is centered in collapsed mode with the close chevron removed. Topbar controls use a fluid flex wrap layout with specific widths to prevent layout overlaps. Metrics boxes use solid bg-white backgrounds with matching border accents and no hover animations. TrajectoryView and AuditEventsView have been reverted from tabbed navigation to responsive side-by-side grids (xl:grid-cols-[1.2fr_0.8fr] and xl:grid-cols-[1.1fr_0.9fr]) showing both sections simultaneously. Production Next.js build compiled successfully.
+
 ## Phase 14: Policy Management UI
 
 Add policy read/test management without making config editing the first step.

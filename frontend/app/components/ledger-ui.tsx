@@ -169,31 +169,40 @@ export function AppShell({
       >
         <aside className="sticky top-0 hidden h-screen flex-col border-r border-neutral-800 bg-neutral-950 text-white lg:flex">
           <div
-            className={`flex items-center justify-between border-b border-neutral-800 ${
-              collapsed ? "px-1.5 py-5" : "px-6 py-5"
+            className={`flex items-center border-b border-neutral-800 ${
+              collapsed ? "justify-center py-5 px-1.5" : "justify-between px-6 py-5"
             }`}
           >
-            <div className={`flex items-center ${collapsed ? "gap-1" : "gap-3"}`}>
-              <div className={`flex shrink-0 items-center justify-center rounded-md border border-neutral-700 bg-neutral-900 ${collapsed ? "h-8 w-8" : "h-9 w-9"}`}>
-                <ShieldCheck size={collapsed ? 16 : 18} />
-              </div>
-              {!collapsed ? (
-                <div>
-                  <p className="text-lg font-semibold leading-none">AgentLens</p>
-                  <p className="mt-2 text-xs uppercase tracking-wide text-neutral-500">Session Ledger</p>
+            {collapsed ? (
+              <button
+                onClick={() => setCollapsed(false)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-neutral-700 bg-neutral-900 text-white transition hover:bg-neutral-800"
+                aria-label="Expand sidebar"
+                title="Expand sidebar"
+              >
+                <ShieldCheck size={18} />
+              </button>
+            ) : (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-neutral-700 bg-neutral-900">
+                    <ShieldCheck size={18} />
+                  </div>
+                  <div>
+                    <p className="text-lg font-semibold leading-none">AgentLens</p>
+                    <p className="mt-2 text-xs uppercase tracking-wide text-neutral-500">Session Ledger</p>
+                  </div>
                 </div>
-              ) : null}
-            </div>
-            <button
-              onClick={() => setCollapsed(!collapsed)}
-              className={`flex items-center justify-center rounded-md text-neutral-400 transition hover:bg-neutral-900 hover:text-white ${
-                collapsed ? "h-7 w-7" : "h-8 w-8"
-              }`}
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            >
-              {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-            </button>
+                <button
+                  onClick={() => setCollapsed(true)}
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-neutral-400 transition hover:bg-neutral-900 hover:text-white"
+                  aria-label="Collapse sidebar"
+                  title="Collapse sidebar"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+              </>
+            )}
           </div>
           <nav
             className={`flex flex-1 flex-col gap-1 overflow-y-auto py-4 text-sm ${
@@ -227,14 +236,9 @@ export function AppShell({
 
         <section className="min-w-0">
           <header className="border-b border-neutral-200 bg-white">
-            <div className="mx-auto flex max-w-[1720px] flex-col gap-4 px-5 py-4 xl:flex-row xl:items-center xl:justify-between xl:px-8">
+            <div className="mx-auto flex max-w-[1720px] flex-col gap-4 px-5 py-4 lg:flex-row lg:items-center lg:justify-between lg:flex-wrap xl:px-8">
               <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge label="Ledger Mode" tone="neutral" />
-                  <Badge label={healthLabel(health)} tone={health === "online" ? "green" : "amber"} />
-                  <span className="truncate text-xs font-medium text-neutral-500">{apiHost}</span>
-                </div>
-                <h1 className="mt-2 text-[26px] font-semibold leading-tight tracking-normal">
+                <h1 className="text-[26px] font-semibold leading-tight tracking-normal">
                   Agent Session Ledger
                 </h1>
                 <p className="mt-1 max-w-3xl text-sm leading-6 text-neutral-600">
@@ -242,11 +246,11 @@ export function AppShell({
                 </p>
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-[minmax(230px,340px)_124px_170px_120px]">
+              <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
                 <select
                   value={activeSessionId ?? ""}
                   onChange={(event) => onSwitchSession(event.target.value)}
-                  className="h-10 min-w-0 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium outline-none focus:border-neutral-950"
+                  className="h-10 w-full sm:w-[260px] rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium outline-none focus:border-neutral-950 text-ellipsis"
                   aria-label="Active AgentLens session"
                 >
                   <option value="" disabled>
@@ -260,7 +264,7 @@ export function AppShell({
                 </select>
                 <button
                   onClick={onFollowLatest}
-                  className={`h-10 whitespace-nowrap rounded-md border px-3 text-sm font-semibold ${
+                  className={`h-10 w-full sm:w-[100px] whitespace-nowrap rounded-md border px-3 text-sm font-semibold ${
                     pinnedSessionId
                       ? "border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
                       : "border-neutral-300 bg-white text-neutral-500"
@@ -271,13 +275,13 @@ export function AppShell({
                 <input
                   value={slackChannel}
                   onChange={(event) => onSlackChannel(event.target.value)}
-                  className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium outline-none focus:border-neutral-950"
+                  className="h-10 w-full sm:w-[140px] rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium outline-none focus:border-neutral-950"
                   aria-label="Slack channel ID"
                 />
                 <button
                   onClick={onSendSlack}
                   disabled={slackLoading}
-                  className="h-10 whitespace-nowrap rounded-md border border-neutral-300 bg-white px-4 text-sm font-semibold text-neutral-900 hover:border-neutral-950 disabled:cursor-not-allowed disabled:text-neutral-400"
+                  className="h-10 w-full sm:w-auto px-4 whitespace-nowrap rounded-md border border-neutral-300 bg-white text-sm font-semibold text-neutral-900 hover:border-neutral-950 disabled:cursor-not-allowed disabled:text-neutral-400 text-center"
                 >
                   {slackLoading ? "Sending" : "Send To Slack"}
                 </button>
@@ -981,23 +985,49 @@ export function ConfidenceFactors({ gate }: { gate: Gate }) {
   );
 }
 
-export function TrajectoryView({ gates, traces, traceByProposal }: { gates: Gate[]; traces: TraceEvent[]; traceByProposal: Map<string, TraceEvent> }) {
+export function TrajectoryView({
+  gates,
+  traces,
+  traceByProposal,
+}: {
+  gates: Gate[];
+  traces: TraceEvent[];
+  traceByProposal: Map<string, TraceEvent>;
+}) {
   return (
-    <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] gap-6">
       <Panel>
-        <PanelTitle eyebrow="Counterfactual Engine" title="Predicted Agent Direction" icon={<GitBranch size={18} />} />
-        {gates.length === 0 ? (
-          <EmptyState title="No trajectory yet" body="Use Codex normally. AgentLens will record trajectory once a gate appears." />
-        ) : (
-          <div className="mt-5 grid gap-3">
-            {gates.map((gate, index) => (
-              <TrajectoryCard key={gate.id} gate={gate} trace={traceByProposal.get(gate.proposal_id)} step={index + 1} />
-            ))}
-          </div>
-        )}
+        <PanelTitle
+          eyebrow="Counterfactual Engine"
+          title="Predicted Direction"
+          icon={<GitBranch size={18} />}
+        />
+        <div className="mt-4">
+          <p className="text-sm text-neutral-500 mb-4">
+            Predicted future actions based on current prompt and state.
+          </p>
+          {gates.length === 0 ? (
+            <EmptyState
+              title="No trajectory yet"
+              body="Use Codex normally. AgentLens will record trajectory once a gate appears."
+            />
+          ) : (
+            <div className="grid gap-3">
+              {gates.map((gate, index) => (
+                <TrajectoryCard
+                  key={gate.id}
+                  gate={gate}
+                  trace={traceByProposal.get(gate.proposal_id)}
+                  step={index + 1}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </Panel>
-      <TimelineLedger traces={traces} gates={gates} compact />
-    </section>
+
+      <TimelineLedger traces={traces} gates={gates} />
+    </div>
   );
 }
 
@@ -1142,38 +1172,56 @@ export function AuditEventsView({
   trustScore: number | null;
 }) {
   return (
-    <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] gap-6">
       <Panel>
         <PanelTitle
           eyebrow="Audit Events"
           title="Session Replay"
-          body="Every trace, policy decision, and human action is rendered as an audit record."
           icon={<FileText size={18} />}
         />
-        <div className="mt-5 grid gap-3">
+        <div className="mt-4">
+          <p className="text-sm text-neutral-500 mb-4">
+            Every trace, policy decision, and human action is rendered as an audit record.
+          </p>
           {traces.length === 0 && gates.length === 0 ? (
-            <EmptyState title="No audit events yet" body="Start a Codex session to populate the ledger." />
-          ) : null}
-          {traces.map((trace, index) => (
-            <LedgerRow
-              key={trace.id}
-              label={`Trace ${index + 1}`}
-              title={toolLabel(trace.tool_name)}
-              body={trace.stated_reason ?? summarizeTrace(trace)}
+            <EmptyState
+              title="No audit events yet"
+              body="Start a Codex session to populate the ledger."
             />
-          ))}
-          {gates.map((gate) => (
-            <LedgerRow
-              key={gate.id}
-              label={titleCase(gate.status)}
-              title={`${titleCase(gate.risk_assessment.risk_level)} risk gate`}
-              body={gate.intelligence_card?.summary ?? gate.policy_decision.reason}
-            />
-          ))}
+          ) : (
+            <div className="grid gap-3">
+              {traces.map((trace, index) => (
+                <LedgerRow
+                  key={trace.id}
+                  label={`Trace ${index + 1}`}
+                  title={toolLabel(trace.tool_name)}
+                  body={trace.stated_reason ?? summarizeTrace(trace)}
+                />
+              ))}
+              {gates.map((gate) => (
+                <LedgerRow
+                  key={gate.id}
+                  label={titleCase(gate.status)}
+                  title={`${titleCase(gate.risk_assessment.risk_level)} risk gate`}
+                  body={gate.intelligence_card?.summary ?? gate.policy_decision.reason}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </Panel>
-      <LedgerAnalyticsPanel analytics={analytics} trustScore={trustScore} />
-    </section>
+
+      <Panel>
+        <PanelTitle
+          eyebrow="Analytics"
+          title="Ledger Analytics"
+          icon={<BarChart3 size={18} />}
+        />
+        <div className="mt-4">
+          <AnalyticsContent analytics={analytics} trustScore={trustScore} />
+        </div>
+      </Panel>
+    </div>
   );
 }
 
@@ -1576,10 +1624,10 @@ function Metric({
   icon: ReactNode;
 }) {
   const borderStyles = {
-    neutral: "border-l-neutral-300 border-t-neutral-200 border-r-neutral-200 border-b-neutral-200",
-    green: "border-l-emerald-500 border-t-neutral-200 border-r-neutral-200 border-b-neutral-200",
-    sky: "border-l-sky-500 border-t-neutral-200 border-r-neutral-200 border-b-neutral-200",
-    red: "border-l-red-500 border-t-neutral-200 border-r-neutral-200 border-b-neutral-200",
+    neutral: "border-neutral-200",
+    green: "border-emerald-200",
+    sky: "border-sky-200",
+    red: "border-red-200",
   };
   
   const iconColor = {
@@ -1591,13 +1639,13 @@ function Metric({
 
   const bgStyles = {
     neutral: "bg-white",
-    green: "bg-gradient-to-br from-white to-emerald-50/10",
-    sky: "bg-gradient-to-br from-white to-sky-50/10",
-    red: "bg-gradient-to-br from-white to-red-50/10",
+    green: "bg-white",
+    sky: "bg-white",
+    red: "bg-white",
   };
 
   return (
-    <div className={`rounded-lg border-l-4 border-t border-r border-b ${borderStyles[accent]} ${bgStyles[accent]} p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition duration-200`}>
+    <div className={`rounded-lg border ${borderStyles[accent]} ${bgStyles[accent]} p-4 shadow-sm`}>
       <div className="flex items-center justify-between gap-3">
         <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">{label}</p>
         <span className={iconColor[accent]}>{icon}</span>
