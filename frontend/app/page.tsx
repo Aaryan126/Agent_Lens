@@ -321,13 +321,15 @@ export default function Home() {
         </Notice>
       ) : null}
 
-      <MetricsStrip
-        gates={gates}
-        traces={traces}
-        analytics={effectiveAnalytics}
-        trustScore={trustScore}
-        sessionId={demo?.session.id ?? null}
-      />
+      {(activeView === "review" || activeView === "flow" || activeView === "trajectory") ? (
+        <MetricsStrip
+          gates={gates}
+          traces={traces}
+          analytics={effectiveAnalytics}
+          trustScore={trustScore}
+          sessionId={demo?.session.id ?? null}
+        />
+      ) : null}
 
       {activeView === "review" ? (
         <ReviewLedger

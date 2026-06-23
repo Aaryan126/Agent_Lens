@@ -511,7 +511,7 @@ graph TB
     SHELL --> LUCIDE
 ```
 
-The frontend is a single-page Next.js 15 app with six client-side views toggled by a state variable. All state lives in the root `Home` component and is props-drilled to children. There is no global state management library, no client-side routing, and no WebSocket connection -- all data is fetched via HTTP polling (2.5s intervals for timeline, 5s for session list).
+The frontend is a single-page Next.js 15 app with six client-side views toggled by a state variable. All state lives in the root `Home` component and is props-drilled to children.
 
 ### Frontend Views
 

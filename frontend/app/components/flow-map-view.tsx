@@ -285,8 +285,8 @@ function FlowMapInner({
   const { fitView } = useReactFlow();
   const [mounted, setMounted] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [interactive, setInteractive] = useState(true);
-  const [showGrid, setShowGrid] = useState(true);
+  const interactive = true;
+  const showGrid = true;
 
   const ordered = useMemo(() => buildOrderedItems(gates, traces, traceByProposal), [gates, traces, traceByProposal]);
 
@@ -523,30 +523,6 @@ function FlowMapInner({
             >
               <Maximize2 size={12} />
               Fit View
-            </button>
-            <button
-              onClick={() => setInteractive(!interactive)}
-              className={`flex items-center gap-1.5 rounded border px-2 py-1 text-xs font-semibold transition ${
-                interactive
-                  ? "bg-white border-neutral-200 text-neutral-600 hover:border-neutral-950"
-                  : "bg-amber-50 border-amber-200 text-amber-800"
-              }`}
-              title={interactive ? "Lock Canvas Panning" : "Unlock Canvas Panning"}
-            >
-              {interactive ? <Unlock size={12} /> : <Lock size={12} />}
-              {interactive ? "Interactive" : "Locked"}
-            </button>
-            <button
-              onClick={() => setShowGrid(!showGrid)}
-              className={`flex items-center gap-1.5 rounded border px-2 py-1 text-xs font-semibold transition ${
-                showGrid
-                  ? "bg-white border-neutral-200 text-neutral-600 hover:border-neutral-950"
-                  : "bg-neutral-100 border-neutral-200 text-neutral-400"
-              }`}
-              title={showGrid ? "Hide Grid Dots" : "Show Grid Dots"}
-            >
-              <Grid size={12} />
-              Grid
             </button>
           </div>
           <div className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">

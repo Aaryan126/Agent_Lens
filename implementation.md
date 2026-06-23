@@ -321,8 +321,13 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
   - Users can select nodes directly on the flowchart canvas. Selecting a Start Node, Trace Node, or Gate Node opens a corresponding custom inspector pane in the right column of the view without switching tabs.
   - The embedded Gate Inspector supports inline gate decisions (Approve, Block, Modify) and Q&A questions directly on the flowchart canvas. Clicking "Open in Review Queue" switches the active view to review the selected gate.
   - The Trace Node inspector includes a dark terminal console displaying pretty-printed JSON params, stated reasons, and colorized git diff excerpts for file changes.
-  - Selected nodes highlight with active glowing overlays matching their risk level, flow map connection lines animate when pointing to pending gates, and the canvas includes top-level action buttons to fit view, lock interaction, or toggle the background grid.
+  - Selected nodes highlight with active glowing overlays matching their risk level, and flow map connection lines animate when pointing to pending gates.
   - Production Next.js build and type check compile successfully.
+- Visual Console Layout Optimizations:
+  - Removed "Interactive" and "Grid" buttons from the Flow Map canvas controls (defaulting to enabled/active).
+  - Swapped custom node nested `<button>` tags with `<div>` tags and mapped selections to React Flow's native `onNodeClick` handler, fixing event swallowing.
+  - Configured context-aware page headers (`viewTitles`) to display the active tab's name, removing the tall static "Agent Session Ledger" header. Hides session switchers and Slack sync actions on non-session screens (Policies, Slack Config, Audit Logs).
+  - Shrunk the `MetricsStrip` panels to render conditionally (hidden on non-session screens) and redesigned `Metric` cards to use a slim inline-flex layout (40% shorter) that places sublabels in inline parentheses and icons on the right.
 
 ## Known Gaps
 

@@ -395,6 +395,8 @@ nodes) are completely removed from the graph itself to keep the layout clean. Pr
 
 Fourth follow-up status: The Flow Map has been enriched into a fully interactive, dual-pane console. Users can select nodes directly on the flowchart to open detail inspectors for Gates, Traces, and Task prompts in the right column, resolve pending gates with inline Approve/Block/Modify controls, inspect pretty-printed parameters and git diffs in a dark terminal style block, and toggle background grid/interaction options via top bar controls. Production Next.js build passes.
 
+Fifth follow-up status: Refactored Flow Map to use React Flow's native `onNodeClick` and HTML `div` wrappers, resolving a node click event swallowing bug. Optimized the dashboard shell layout by introducing context-aware compact headers, hiding session selection and Slack integrations on global pages, rendering the metrics strip conditionally, and redesigning metrics cards into a 40% shorter inline-flex layout. Production Next.js build and all pytest tests pass.
+
 ## Phase 14: Policy Management UI
 
 Make the PRD policy engine manageable from the session ledger instead of only through

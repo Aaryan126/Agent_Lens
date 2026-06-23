@@ -129,6 +129,15 @@ const chartColors: Record<string, string> = {
   auto_executed: "#737373",
 };
 
+const viewTitles: Record<View, string> = {
+  review: "Live Review Queue",
+  flow: "Agent Flow Map",
+  trajectory: "Counterfactual Trajectories",
+  policies: "Standing Policy Rules",
+  slack: "Slack Surface Settings",
+  audit: "System Audit Trail",
+};
+
 export function AppShell({
   activeView,
   onView,
@@ -172,6 +181,8 @@ export function AppShell({
       window.localStorage.setItem("agentlens-sidebar-collapsed", String(collapsed));
     } catch {}
   }, [collapsed]);
+
+  const isSessionView = activeView === "review" || activeView === "flow" || activeView === "trajectory";
 
   return (
     <main className="min-h-screen bg-[#f4f4f1] text-neutral-950">
@@ -249,56 +260,55 @@ export function AppShell({
 
         <section className="min-w-0">
           <header className="border-b border-neutral-200 bg-white">
-            <div className="mx-auto flex max-w-[1720px] flex-col gap-4 px-5 py-4 lg:flex-row lg:items-center lg:justify-between lg:flex-wrap xl:px-8">
+            <div className="mx-auto flex max-w-[1720px] flex-col gap-3 px-5 py-3 sm:flex-row sm:items-center sm:justify-between xl:px-8">
               <div className="min-w-0">
-                <h1 className="text-[26px] font-semibold leading-tight tracking-normal">
-                  Agent Session Ledger
+                <h1 className="text-xl font-semibold tracking-tight text-neutral-900">
+                  {viewTitles[activeView] ?? "Agent Session Ledger"}
                 </h1>
-                <p className="mt-1 max-w-3xl text-sm leading-6 text-neutral-600">
-                  Replay Codex actions, inspect risk evidence, and explain every human decision.
-                </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
-                <select
-                  value={activeSessionId ?? ""}
-                  onChange={(event) => onSwitchSession(event.target.value)}
-                  className="h-10 w-full sm:w-[260px] rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium outline-none focus:border-neutral-950 text-ellipsis"
-                  aria-label="Active AgentLens session"
-                >
-                  <option value="" disabled>
-                    No active session
-                  </option>
-                  {recentSessions.map((session) => (
-                    <option key={session.id} value={session.id}>
-                      {sessionLabel(session)}
+              {isSessionView && (
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                  <select
+                    value={activeSessionId ?? ""}
+                    onChange={(event) => onSwitchSession(event.target.value)}
+                    className="h-9 w-full sm:w-[220px] rounded-md border border-neutral-300 bg-white px-2.5 text-xs font-medium outline-none focus:border-neutral-950 text-ellipsis"
+                    aria-label="Active AgentLens session"
+                  >
+                    <option value="" disabled>
+                      No active session
                     </option>
-                  ))}
-                </select>
-                <button
-                  onClick={onFollowLatest}
-                  className={`h-10 w-full sm:w-[100px] whitespace-nowrap rounded-md border px-3 text-sm font-semibold ${
-                    pinnedSessionId
-                      ? "border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
-                      : "border-neutral-300 bg-white text-neutral-500"
-                  }`}
-                >
-                  {pinnedSessionId ? "Follow Latest" : "Following"}
-                </button>
-                <input
-                  value={slackChannel}
-                  onChange={(event) => onSlackChannel(event.target.value)}
-                  className="h-10 w-full sm:w-[140px] rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium outline-none focus:border-neutral-950"
-                  aria-label="Slack channel ID"
-                />
-                <button
-                  onClick={onSendSlack}
-                  disabled={slackLoading}
-                  className="h-10 w-full sm:w-auto px-4 whitespace-nowrap rounded-md border border-neutral-300 bg-white text-sm font-semibold text-neutral-900 hover:border-neutral-950 disabled:cursor-not-allowed disabled:text-neutral-400 text-center"
-                >
-                  {slackLoading ? "Sending" : "Send To Slack"}
-                </button>
-              </div>
+                    {recentSessions.map((session) => (
+                      <option key={session.id} value={session.id}>
+                        {sessionLabel(session)}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={onFollowLatest}
+                    className={`h-9 w-full sm:w-[100px] whitespace-nowrap rounded-md border px-3 text-xs font-semibold ${
+                      pinnedSessionId
+                        ? "border-neutral-950 bg-neutral-950 text-white hover:bg-neutral-800"
+                        : "border-neutral-300 bg-white text-neutral-500"
+                    }`}
+                  >
+                    {pinnedSessionId ? "Follow Latest" : "Following"}
+                  </button>
+                  <input
+                    value={slackChannel}
+                    onChange={(event) => onSlackChannel(event.target.value)}
+                    className="h-9 w-full sm:w-[110px] rounded-md border border-neutral-300 bg-white px-2.5 text-xs font-medium outline-none focus:border-neutral-950"
+                    aria-label="Slack channel ID"
+                  />
+                  <button
+                    onClick={onSendSlack}
+                    disabled={slackLoading}
+                    className="h-9 w-full sm:w-auto px-3 whitespace-nowrap rounded-md border border-neutral-300 bg-white text-xs font-semibold text-neutral-900 hover:border-neutral-950 disabled:cursor-not-allowed disabled:text-neutral-400 text-center"
+                  >
+                    {slackLoading ? "Sending" : "Send To Slack"}
+                  </button>
+                </div>
+              )}
             </div>
           </header>
 
@@ -2064,13 +2074,15 @@ function Metric({
   };
 
   return (
-    <div className={`rounded-lg border ${borderStyles[accent]} ${bgStyles[accent]} p-4 shadow-sm`}>
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">{label}</p>
-        <span className={iconColor[accent]}>{icon}</span>
+    <div className={`rounded-lg border ${borderStyles[accent]} ${bgStyles[accent]} px-3.5 py-3 shadow-sm flex items-center justify-between gap-4`}>
+      <div className="min-w-0">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 leading-none">{label}</p>
+        <div className="mt-2 flex items-baseline gap-1.5 leading-none">
+          <span className="text-xl font-bold tracking-tight text-neutral-900">{value}</span>
+          {sublabel ? <span className="text-[10px] font-medium text-neutral-400">({sublabel})</span> : null}
+        </div>
       </div>
-      <p className="mt-2.5 truncate text-2xl font-bold tracking-tight text-neutral-900 leading-none">{value}</p>
-      {sublabel ? <p className="mt-1 text-[11px] font-medium text-neutral-400">{sublabel}</p> : null}
+      <span className={`${iconColor[accent]} shrink-0`}>{icon}</span>
     </div>
   );
 }
