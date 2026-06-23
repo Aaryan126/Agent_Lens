@@ -59,9 +59,13 @@ import type {
   DemoResponse,
   ExplainMoreResponse,
   Gate,
+  GateQuestionResponse,
   GateStatus,
   HealthState,
   LedgerAnalytics,
+  PolicyConfigResponse,
+  PolicyRule,
+  PolicyTestResponse,
   RiskLevel,
   SessionSummary,
   SlackSendResult,
@@ -363,6 +367,7 @@ export function ReviewLedger({
       <GateInspector
         gate={selectedGate}
         trace={selectedGate ? traceByProposal.get(selectedGate.proposal_id) : undefined}
+        apiUrl={apiUrl}
         decisionNote={decisionNote}
         explain={explain}
         explainLoading={explainLoading}
@@ -597,6 +602,7 @@ export function GateTable({
 export function GateInspector({
   gate,
   trace,
+  apiUrl,
   decisionNote,
   explain,
   explainLoading,
@@ -607,6 +613,7 @@ export function GateInspector({
 }: {
   gate: Gate | null;
   trace: TraceEvent | undefined;
+  apiUrl: string;
   decisionNote: string;
   explain: ExplainMoreResponse | null;
   explainLoading: boolean;
@@ -751,7 +758,7 @@ export function GateInspector({
               {explainLoading ? "Loading Explanation" : "Explain More"}
             </button>
             {explainError ? <p className="mt-2 text-xs leading-5 text-red-700">{explainError}</p> : null}
-            {explain ? <ExplainMorePanel explain={explain} trace={trace} /> : null}
+            {explain ? <ExplainMorePanel explain={explain} trace={trace} apiUrl={apiUrl} /> : null}
           </>
         ) : null}
       </div>
@@ -795,9 +802,38 @@ const inspectorTabs = [
 ] as const;
 type InspectorTab = (typeof inspectorTabs)[number]["id"];
 
-function ExplainMorePanel({ explain, trace }: { explain: ExplainMoreResponse; trace?: TraceEvent }) {
+function ExplainMorePanel({ explain, trace, apiUrl }: { explain: ExplainMoreResponse; trace?: TraceEvent; apiUrl: string }) {
   const [question, setQuestion] = useState("");
-  const answer = answerExplainQuestion(question, explain);
+  const [answer, setAnswer] = useState<GateQuestionResponse | null>(null);
+  const [asking, setAsking] = useState(false);
+  const [askError, setAskError] = useState<string | null>(null);
+
+  async function askQuestion() {
+    if (!question.trim()) return;
+    setAsking(true);
+    setAskError(null);
+    try {
+      const response = await fetch(`${apiUrl}/gates/${explain.gate_id}/questions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question }),
+      });
+      if (!response.ok) throw new Error(`Question failed with ${response.status}`);
+      setAnswer((await response.json()) as GateQuestionResponse);
+    } catch (error) {
+      setAskError(error instanceof Error ? error.message : "Unable to answer question");
+      setAnswer({
+        gate_id: explain.gate_id,
+        question,
+        answer: answerExplainQuestion(question, explain),
+        evidence: [],
+        used_model_role: "client_fallback",
+      });
+    } finally {
+      setAsking(false);
+    }
+  }
+
   return (
     <section className="mt-5 rounded-lg border border-neutral-200 bg-neutral-50 p-4">
       <div className="flex items-center gap-2">
@@ -819,14 +855,34 @@ function ExplainMorePanel({ explain, trace }: { explain: ExplainMoreResponse; tr
       <input
         id="explain-question"
         value={question}
-        onChange={(event) => setQuestion(event.target.value)}
+        onChange={(event) => {
+          setQuestion(event.target.value);
+          setAnswer(null);
+          setAskError(null);
+        }}
         placeholder="Why is this risky?"
         className="mt-2 h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm outline-none focus:border-neutral-950"
       />
-      {question.trim() ? (
-        <p className="mt-2 rounded-md border border-neutral-200 bg-white p-3 text-sm leading-6 text-neutral-700">
-          {answer}
-        </p>
+      <button
+        onClick={() => void askQuestion()}
+        disabled={!question.trim() || asking}
+        className="mt-2 h-9 rounded-md bg-neutral-950 px-3 text-xs font-semibold uppercase tracking-wide text-white disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {asking ? "Answering" : "Ask AgentLens"}
+      </button>
+      {askError ? <p className="mt-2 text-xs leading-5 text-amber-700">{askError}; showing fallback.</p> : null}
+      {answer ? (
+        <div className="mt-3 rounded-md border border-neutral-200 bg-white p-3 text-sm leading-6 text-neutral-700">
+          <p>{answer.answer}</p>
+          <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+            Source: {titleCase(answer.used_model_role)}
+          </p>
+          {answer.evidence.length ? (
+            <ul className="mt-2 list-disc space-y-1 pl-4 text-xs leading-5 text-neutral-500">
+              {answer.evidence.slice(0, 4).map((item) => <li key={item}>{item}</li>)}
+            </ul>
+          ) : null}
+        </div>
       ) : null}
       <details className="mt-4">
         <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-neutral-500">
@@ -1031,71 +1087,347 @@ export function TrajectoryView({
   );
 }
 
-export function PolicyLedgerView({ gates }: { gates: Gate[] }) {
-  const rows = gates.length
-    ? gates.map((gate) => ({
-        name: gate.policy_decision.matched_policy ?? "Semantic Risk Recommendation",
-        condition: gate.policy_decision.reason,
-        action: titleCase(gate.policy_decision.action),
-        risk: gate.risk_assessment.risk_level,
-        status: gate.status,
-      }))
-    : [
-        {
-          name: "Auto-Approve Safe Reads",
-          condition: "Read-only file and inspection calls",
-          action: "Auto Execute",
-          risk: "low" as RiskLevel,
-          status: "auto_executed" as GateStatus,
-        },
-        {
-          name: "Review Gated Writes",
-          condition: "Tracked source changes with medium reversibility",
-          action: "Require Approval",
-          risk: "medium" as RiskLevel,
-          status: "pending" as GateStatus,
-        },
-        {
-          name: "Protect Migrations",
-          condition: "Database migrations, deployment, and destructive operations",
-          action: "Block And Alert",
-          risk: "critical" as RiskLevel,
-          status: "blocked" as GateStatus,
-        },
-      ];
+const policyInputClass = "mt-1 h-10 w-full min-w-0 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium normal-case tracking-normal text-neutral-900 outline-none transition focus:border-neutral-950 focus:ring-2 focus:ring-neutral-950/10";
+const policyButtonFeedback = "inline-flex items-center justify-center rounded-md text-sm font-semibold transition duration-150 hover:-translate-y-px active:translate-y-0 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-neutral-950/15 disabled:pointer-events-none disabled:opacity-50";
+const primaryPolicyButtonClass = `${policyButtonFeedback} h-9 bg-neutral-950 px-3 text-white hover:bg-neutral-800`;
+const secondaryPolicyButtonClass = `${policyButtonFeedback} h-9 border border-neutral-300 bg-white px-3 text-neutral-900 hover:border-neutral-950 hover:bg-neutral-50`;
+const savePolicyButtonClass = `${policyButtonFeedback} h-9 border border-emerald-300 bg-emerald-50 px-3 text-emerald-800 hover:border-emerald-500 hover:bg-emerald-100`;
+const secondarySmallButtonClass = `${policyButtonFeedback} h-8 border border-neutral-300 bg-white px-2.5 text-xs text-neutral-900 hover:border-neutral-950 hover:bg-neutral-50`;
+const dangerSmallButtonClass = `${policyButtonFeedback} h-8 border border-red-200 bg-red-50 px-2.5 text-xs text-red-700 hover:border-red-300 hover:bg-red-100`;
+
+function policyCompareKey(policies: PolicyRule[]) {
+  return JSON.stringify(
+    policies.map((policy) => ({
+      name: policy.name,
+      action: policy.action,
+      min_confidence: policy.min_confidence ?? null,
+      condition: policy.condition ?? {},
+    })),
+  );
+}
+
+export function PolicyLedgerView({ gates, apiUrl }: { gates: Gate[]; apiUrl: string }) {
+  const [config, setConfig] = useState<PolicyConfigResponse | null>(null);
+  const [draftPolicies, setDraftPolicies] = useState<PolicyRule[]>([]);
+  const [policyMessage, setPolicyMessage] = useState<string | null>(null);
+  const [policyError, setPolicyError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [testTool, setTestTool] = useState("fs.write");
+  const [testTarget, setTestTarget] = useState("README.md");
+  const [testConfidence, setTestConfidence] = useState("0.72");
+  const [testRisk, setTestRisk] = useState<RiskLevel>("medium");
+  const [testResult, setTestResult] = useState<PolicyTestResponse | null>(null);
+  const dirty = useMemo(
+    () => policyCompareKey(config?.policies ?? []) !== policyCompareKey(draftPolicies),
+    [config?.policies, draftPolicies],
+  );
+
+  useEffect(() => {
+    void loadPolicies();
+  }, [apiUrl]);
+
+  async function loadPolicies() {
+    setPolicyError(null);
+    try {
+      const response = await fetch(`${apiUrl}/policies`);
+      if (!response.ok) throw new Error(`Policy load failed with ${response.status}`);
+      const body = (await response.json()) as PolicyConfigResponse;
+      setConfig(body);
+      setDraftPolicies(body.policies);
+      setPolicyMessage(`Loaded ${body.policies.length} policy rule${body.policies.length === 1 ? "" : "s"}.`);
+    } catch (error) {
+      setPolicyError(error instanceof Error ? error.message : "Unable to load policies");
+    }
+  }
+
+  async function savePolicies() {
+    setSaving(true);
+    setPolicyError(null);
+    try {
+      const response = await fetch(`${apiUrl}/policies`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ policies: draftPolicies }),
+      });
+      if (!response.ok) throw new Error(`Policy save failed with ${response.status}`);
+      const body = (await response.json()) as PolicyConfigResponse;
+      setConfig(body);
+      setDraftPolicies(body.policies);
+      setPolicyMessage(`Saved ${body.policies.length} policy rule${body.policies.length === 1 ? "" : "s"} to ${body.config_path}.`);
+    } catch (error) {
+      setPolicyError(error instanceof Error ? error.message : "Unable to save policies");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function testDraftPolicies() {
+    setPolicyError(null);
+    try {
+      const confidence = Number.parseFloat(testConfidence);
+      const params = testTool === "shell.run"
+        ? { command: testTarget }
+        : testTool === "db.query"
+          ? { query: testTarget }
+          : { path: testTarget };
+      const response = await fetch(`${apiUrl}/policies/test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          policies: draftPolicies,
+          risk_level: testRisk,
+          proposal: {
+            session_id: "policy_test",
+            tool_name: testTool,
+            params,
+            confidence: Number.isFinite(confidence) ? confidence : null,
+          },
+        }),
+      });
+      if (!response.ok) throw new Error(`Policy test failed with ${response.status}`);
+      setTestResult((await response.json()) as PolicyTestResponse);
+    } catch (error) {
+      setPolicyError(error instanceof Error ? error.message : "Unable to test policies");
+    }
+  }
+
+  function updatePolicy(index: number, patch: Partial<PolicyRule>) {
+    setDraftPolicies((current) => current.map((policy, itemIndex) => itemIndex === index ? { ...policy, ...patch } : policy));
+  }
+
+  function updateCondition(index: number, value: string) {
+    try {
+      const parsed = JSON.parse(value) as Record<string, unknown>;
+      updatePolicy(index, { condition: parsed });
+      setPolicyError(null);
+    } catch {
+      setPolicyError("Condition JSON is invalid. Fix it before saving.");
+    }
+  }
+
+  function movePolicy(index: number, direction: -1 | 1) {
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= draftPolicies.length) return;
+    setDraftPolicies((current) => {
+      const next = [...current];
+      const [item] = next.splice(index, 1);
+      next.splice(nextIndex, 0, item);
+      return next;
+    });
+  }
+
+  function addPolicy() {
+    setDraftPolicies((current) => [
+      ...current,
+      {
+        name: "New policy",
+        condition: { path_contains: ["README.md"] },
+        action: "require_approval",
+        min_confidence: null,
+      },
+    ]);
+  }
+
+  const runtimeRows = gates.map((gate) => ({
+    name: gate.policy_decision.matched_policy ?? "Semantic Risk Recommendation",
+    condition: gate.policy_decision.reason,
+    action: titleCase(gate.policy_decision.action),
+    risk: gate.risk_assessment.risk_level,
+    status: gate.status,
+  }));
+
   return (
-    <Panel>
-      <PanelTitle
-        eyebrow="Policy Ledger"
-        title="Standing Rules And Runtime Matches"
-        body="Current policy matches are shown from session history. Editable policy management is the next phase."
-        icon={<SlidersHorizontal size={18} />}
-      />
-      <div className="mt-5 overflow-x-auto rounded-lg border border-neutral-200">
-        <table className="w-full min-w-[820px] text-left">
-          <thead className="bg-neutral-50 text-xs font-semibold uppercase tracking-wide text-neutral-500">
-            <tr>
-              <th className="border-b border-neutral-200 px-4 py-3">Rule</th>
-              <th className="border-b border-neutral-200 px-4 py-3">Condition</th>
-              <th className="border-b border-neutral-200 px-4 py-3">Decision</th>
-              <th className="border-b border-neutral-200 px-4 py-3">Risk</th>
-              <th className="border-b border-neutral-200 px-4 py-3">Result</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, index) => (
-              <tr key={`${row.name}-${index}`} className="border-b border-neutral-100 last:border-b-0">
-                <td className="px-4 py-4 text-sm font-semibold">{row.name}</td>
-                <td className="px-4 py-4 text-sm text-neutral-600">{row.condition}</td>
-                <td className="px-4 py-4 text-sm font-medium">{row.action}</td>
-                <td className="px-4 py-4"><RiskBadge risk={row.risk} /></td>
-                <td className="px-4 py-4"><StatusBadge status={row.status} /></td>
-              </tr>
+    <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
+      <div className="min-w-0 space-y-5">
+        <Panel>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <PanelTitle
+              eyebrow="Policy Management"
+              title="Standing Rules"
+              body="Edit ordered rules, test the draft against a sample action, then save back to agentlens.config.yaml."
+              icon={<SlidersHorizontal size={18} />}
+            />
+            {dirty ? (
+              <span className="inline-flex w-fit shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                Unsaved changes
+              </span>
+            ) : null}
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <button onClick={addPolicy} className={primaryPolicyButtonClass}>Create Policy</button>
+            <button onClick={() => void loadPolicies()} className={secondaryPolicyButtonClass}>Reload</button>
+            <button
+              onClick={() => void savePolicies()}
+              disabled={!dirty || saving || Boolean(policyError?.includes("Condition JSON"))}
+              className={savePolicyButtonClass}
+            >
+              {saving ? "Saving" : "Save To Config"}
+            </button>
+          </div>
+          {policyMessage ? <p className="mt-3 text-sm text-neutral-600">{policyMessage}</p> : null}
+          {policyError ? <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{policyError}</p> : null}
+          <div className="mt-5 space-y-3">
+            {draftPolicies.map((policy, index) => (
+              <article key={`${index}-${JSON.stringify(policy.condition)}`} className="overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50">
+                <div className="grid gap-3 border-b border-neutral-200 bg-white p-3 lg:grid-cols-[minmax(0,1fr)_160px_130px]">
+                  <label className="min-w-0 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                    Name
+                    <input
+                      value={policy.name}
+                      onChange={(event) => updatePolicy(index, { name: event.target.value })}
+                      className={policyInputClass}
+                    />
+                  </label>
+                  <label className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                    Action
+                    <select
+                      value={policy.action}
+                      onChange={(event) => updatePolicy(index, { action: event.target.value as PolicyRule["action"] })}
+                      className={policyInputClass}
+                    >
+                      {(config?.supported_actions ?? ["auto_execute", "require_approval", "block_and_alert"]).map((action) => (
+                        <option key={action} value={action}>{titleCase(action)}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                    Min Conf.
+                    <input
+                      value={policy.min_confidence ?? ""}
+                      placeholder="optional"
+                      onChange={(event) => updatePolicy(index, { min_confidence: event.target.value ? Number(event.target.value) : null })}
+                      className={policyInputClass}
+                    />
+                  </label>
+                </div>
+                <div className="grid gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_210px]">
+                  <label className="min-w-0 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                    Condition JSON
+                    <textarea
+                      defaultValue={JSON.stringify(policy.condition, null, 2)}
+                      onBlur={(event) => updateCondition(index, event.target.value)}
+                      className="mt-1 min-h-20 max-h-36 w-full resize-y rounded-md border border-neutral-300 bg-white p-3 font-mono text-xs normal-case tracking-normal outline-none transition focus:border-neutral-950"
+                    />
+                  </label>
+                  <div className="flex flex-wrap content-start gap-2 pt-5 lg:justify-end">
+                    <button onClick={() => movePolicy(index, -1)} className={secondarySmallButtonClass}>Move Up</button>
+                    <button onClick={() => movePolicy(index, 1)} className={secondarySmallButtonClass}>Move Down</button>
+                    <button
+                      onClick={() => setDraftPolicies((current) => [...current, { ...policy, name: `${policy.name} copy` }])}
+                      className={secondarySmallButtonClass}
+                    >
+                      Duplicate
+                    </button>
+                    <button
+                      onClick={() => setDraftPolicies((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                      className={dangerSmallButtonClass}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </article>
             ))}
-          </tbody>
-        </table>
+          </div>
+        </Panel>
+
+        <Panel>
+          <PanelTitle
+            eyebrow="Runtime Matches"
+            title="Session Policy Ledger"
+            body="These rows show how the current session matched configured rules or semantic risk fallback."
+            icon={<BarChart3 size={18} />}
+            small
+          />
+          <div className="mt-5 overflow-hidden rounded-lg border border-neutral-200">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-left">
+                <thead className="bg-neutral-50 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                  <tr>
+                    <th className="border-b border-neutral-200 px-4 py-3">Rule</th>
+                    <th className="border-b border-neutral-200 px-4 py-3">Condition</th>
+                    <th className="border-b border-neutral-200 px-4 py-3">Decision</th>
+                    <th className="border-b border-neutral-200 px-4 py-3">Risk</th>
+                    <th className="border-b border-neutral-200 px-4 py-3">Result</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {runtimeRows.length ? runtimeRows.map((row, index) => (
+                    <tr key={`${row.name}-${index}`} className="border-b border-neutral-100 last:border-b-0">
+                      <td className="px-4 py-4 text-sm font-semibold">{row.name}</td>
+                      <td className="max-w-[360px] px-4 py-4 text-sm text-neutral-600">
+                        <span className="line-clamp-2">{row.condition}</span>
+                      </td>
+                      <td className="px-4 py-4 text-sm font-medium">{row.action}</td>
+                      <td className="px-4 py-4"><RiskBadge risk={row.risk} /></td>
+                      <td className="px-4 py-4"><StatusBadge status={row.status} /></td>
+                    </tr>
+                  )) : (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-sm text-neutral-500">
+                        No runtime policy matches in this session yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </Panel>
       </div>
-    </Panel>
+
+      <aside className="min-w-0 xl:sticky xl:top-5 xl:self-start">
+        <Panel>
+          <PanelTitle
+            eyebrow="Draft Test"
+            title="Policy Simulator"
+            body="Run the unsaved policy draft against a representative tool call."
+            icon={<Search size={18} />}
+            small
+          />
+          <div className="mt-5 grid gap-3">
+            <label className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+              Tool
+              <select value={testTool} onChange={(event) => setTestTool(event.target.value)} className={policyInputClass}>
+                {["fs.read", "fs.write", "fs.delete", "shell.run", "db.query", "api.call", "git.status", "run_tests"].map((tool) => (
+                  <option key={tool} value={tool}>{tool}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+              Target Path / Command / Query
+              <input value={testTarget} onChange={(event) => setTestTarget(event.target.value)} className={policyInputClass} />
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                Confidence
+                <input value={testConfidence} onChange={(event) => setTestConfidence(event.target.value)} className={policyInputClass} />
+              </label>
+              <label className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                Risk
+                <select value={testRisk} onChange={(event) => setTestRisk(event.target.value as RiskLevel)} className={policyInputClass}>
+                  {["low", "medium", "high", "critical"].map((risk) => <option key={risk} value={risk}>{titleCase(risk)}</option>)}
+                </select>
+              </label>
+            </div>
+            <button onClick={() => void testDraftPolicies()} className={primaryPolicyButtonClass}>Test Draft Policies</button>
+            {testResult ? (
+              <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Result</p>
+                <p className="mt-2 text-lg font-semibold">{titleCase(testResult.decision.action)}</p>
+                <p className="mt-1 text-sm text-neutral-600">{testResult.decision.matched_policy ?? "Semantic risk fallback"}</p>
+                <p className="mt-2 text-sm leading-6 text-neutral-700">{testResult.decision.reason}</p>
+              </div>
+            ) : null}
+            {config ? (
+              <div className="rounded-lg border border-dashed border-neutral-300 p-3 text-xs leading-5 text-neutral-600">
+                Saved config: {config.config_path}
+              </div>
+            ) : null}
+          </div>
+        </Panel>
+      </aside>
+    </div>
   );
 }
 
@@ -1546,7 +1878,7 @@ function AnalyticsContent({
 }
 
 function Panel({ children }: { children: ReactNode }) {
-  return <section className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">{children}</section>;
+  return <section className="min-w-0 rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">{children}</section>;
 }
 
 function PanelTitle({

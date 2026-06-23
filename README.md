@@ -48,8 +48,24 @@ The UI is designed to make approvals, risk signals, and supporting evidence read
 - Lucide React provides consistent interface icons.
 - The inspector includes Explain More, trajectory, dependency evidence, confidence
   calibration, policy match, raw sanitized tool payload, and decision controls.
+- The Explain tab can answer gate-specific questions from backend evidence; answers use
+  visible trace metadata, policy/risk evidence, dependency evidence, git excerpts, and
+  deterministic fallback when OpenAI credentials are unavailable.
 - The UI follows the active local Codex session by default and can pin a specific session
   or gate when multiple terminals are running.
+
+## Policy Management
+
+Policies are still stored in `agentlens.config.yaml`, but the dashboard can now manage
+that file directly. The Policy Ledger view loads configured rules, lets users create,
+edit, duplicate, delete, reorder, test draft rules, and save normalized YAML back to the
+repo config.
+
+Backend policy endpoints:
+
+- `GET /policies`: read the current repo policy config and supported condition fields.
+- `PUT /policies`: validate and save the full policy list to `agentlens.config.yaml`.
+- `POST /policies/test`: evaluate an unsaved draft policy list against a sample proposal.
 
 ## Setup
 
@@ -350,6 +366,8 @@ uv run agentlens-demo --codex-prompt "Inspect this repo and describe likely next
 4. Inspect pending gates with `GET /gates/pending`.
 5. Approve, block, modify, or explain the gate.
 6. Review the timeline with `GET /sessions/{id}/timeline`.
+7. Manage standing policies from the dashboard or with `GET /policies`,
+   `PUT /policies`, and `POST /policies/test`.
 
 For a faster CLI-only check, run `uv run agentlens-demo --fixture ../examples/demo_session.json`
 from `backend/`.

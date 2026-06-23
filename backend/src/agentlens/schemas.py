@@ -130,6 +130,34 @@ class PolicyDecision(BaseModel):
     reason: str
 
 
+class PolicyRuleSchema(BaseModel):
+    name: str
+    condition: dict[str, Any] = Field(default_factory=dict)
+    action: PolicyAction
+    min_confidence: float | None = None
+
+
+class PolicyConfigResponse(BaseModel):
+    config_path: str
+    policies: list[PolicyRuleSchema] = Field(default_factory=list)
+    supported_conditions: dict[str, str]
+    supported_actions: list[PolicyAction]
+
+
+class PolicyConfigPayload(BaseModel):
+    policies: list[PolicyRuleSchema] = Field(default_factory=list)
+
+
+class PolicyTestPayload(BaseModel):
+    policies: list[PolicyRuleSchema] = Field(default_factory=list)
+    proposal: ToolCallProposal
+    risk_level: RiskLevel | None = None
+
+
+class PolicyTestResponse(BaseModel):
+    decision: PolicyDecision
+
+
 class DependencyEvidence(BaseModel):
     path: str
     referenced_by: list[str] = Field(default_factory=list)
@@ -219,6 +247,18 @@ class ExplainMoreResponse(BaseModel):
     dependency_evidence: list[DependencyEvidence] = Field(default_factory=list)
     suggested_modification: str | None = None
     context_summary: str
+
+
+class GateQuestionPayload(BaseModel):
+    question: str = Field(min_length=1, max_length=500)
+
+
+class GateQuestionResponse(BaseModel):
+    gate_id: str
+    question: str
+    answer: str
+    evidence: list[str] = Field(default_factory=list)
+    used_model_role: str
 
 
 class Gate(BaseModel):

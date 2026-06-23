@@ -11,12 +11,24 @@ from pydantic import BaseModel
 
 from agentlens.analytics import build_ledger_analytics
 from agentlens.adapters.codex_cli import CodexCliAdapter
-from agentlens.config import load_settings
+from agentlens.config import AgentLensConfig, PolicyRule, load_config, load_settings, save_config
+from agentlens.policy import PolicyEngine
 from agentlens.schemas import (
+    GateQuestionPayload,
+    GateQuestionResponse,
     Gate,
     GateStatus,
     ExplainMoreResponse,
     LedgerAnalytics,
+    PolicyAction,
+    PolicyConfigPayload,
+    PolicyConfigResponse,
+    PolicyRuleSchema,
+    PolicyTestPayload,
+    PolicyTestResponse,
+    RiskAssessment,
+    Reversibility,
+    BlastRadius,
     Session,
     SessionStart,
     Timeline,
@@ -71,9 +83,60 @@ class CodexRunPayload(BaseModel):
     timeout_seconds: int = 120
 
 
+SUPPORTED_POLICY_CONDITIONS = {
+    "tool_in": "Match when the proposal tool name is in this list.",
+    "path_contains": "Match when the proposal path contains any listed fragment.",
+    "param_contains": "Match when a named proposal param contains any listed fragment.",
+    "confidence_below": "Match when provider confidence is below this number.",
+    "risk_not": "Match when semantic risk is not the selected risk level.",
+}
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/policies")
+def get_policies() -> PolicyConfigResponse:
+    path = _policy_config_path()
+    config = load_config(path)
+    return PolicyConfigResponse(
+        config_path=str(path),
+        policies=[_schema_from_rule(policy) for policy in config.policies],
+        supported_conditions=SUPPORTED_POLICY_CONDITIONS,
+        supported_actions=list(PolicyAction),
+    )
+
+
+@app.put("/policies")
+def save_policies(payload: PolicyConfigPayload) -> PolicyConfigResponse:
+    config = AgentLensConfig(policies=[_rule_from_schema(policy) for policy in payload.policies])
+    path = _policy_config_path()
+    save_config(path, config)
+    return PolicyConfigResponse(
+        config_path=str(path),
+        policies=[_schema_from_rule(policy) for policy in config.policies],
+        supported_conditions=SUPPORTED_POLICY_CONDITIONS,
+        supported_actions=list(PolicyAction),
+    )
+
+
+@app.post("/policies/test")
+def test_policies(payload: PolicyTestPayload) -> PolicyTestResponse:
+    config = AgentLensConfig(policies=[_rule_from_schema(policy) for policy in payload.policies])
+    risk = None
+    if payload.risk_level is not None:
+        risk = RiskAssessment(
+            proposal_id=payload.proposal.id,
+            reversibility=Reversibility.MEDIUM,
+            blast_radius=BlastRadius.LOW,
+            risk_level=payload.risk_level,
+            recommended_action=PolicyAction.REQUIRE_APPROVAL,
+            evidence=["policy test input"],
+        )
+    decision = PolicyEngine(config).evaluate(payload.proposal, risk)
+    return PolicyTestResponse(decision=decision)
 
 
 @app.post("/sessions")
@@ -229,6 +292,18 @@ def explain_gate(gate_id: str) -> ExplainMoreResponse:
         raise HTTPException(status_code=404, detail="gate not found") from None
 
 
+@app.post("/gates/{gate_id}/questions")
+def ask_gate_question(gate_id: str, payload: GateQuestionPayload) -> GateQuestionResponse:
+    gate = store.gates.get(gate_id)
+    if gate is None:
+        raise HTTPException(status_code=404, detail="gate not found")
+    session = AgentLensSession(store.get_session(gate.session_id))
+    try:
+        return session.answer_question(gate_id, payload.question)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="gate not found") from None
+
+
 @app.post("/integrations/slack/actions")
 async def slack_actions(request: Request) -> dict[str, object]:
     body = await request.body()
@@ -291,3 +366,15 @@ def _resolve_gate(gate_id: str, status: GateStatus, payload: DecisionPayload) ->
     gate.modified_instruction = payload.modified_instruction
     gate.resolved_at = datetime.now(UTC)
     return store.update_gate(gate)
+
+
+def _policy_config_path() -> Path:
+    return PROJECT_ROOT / "agentlens.config.yaml"
+
+
+def _rule_from_schema(policy: PolicyRuleSchema) -> PolicyRule:
+    return PolicyRule(**policy.model_dump())
+
+
+def _schema_from_rule(policy: PolicyRule) -> PolicyRuleSchema:
+    return PolicyRuleSchema(**policy.model_dump())

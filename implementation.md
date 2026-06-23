@@ -251,6 +251,30 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
   frontend `npm run build` passed and the local dev server rendered the new layout.
 - Premium operator console polish: redesigned empty states with centered layouts, illustrative icons, and a pulsing live connection indicator. Realigned the collapsed inspection batch row in the decision table to standard table columns. Removed header badge rows and refactored metric cards to use subtle colored all-around borders without hover transitions. Added client-side search filtering to the gate queue table in real-time, styled the inspector facts, and added check/ban/edit icons to decision buttons. Next.js build and type validations pass.
 - Final Operator Console Polish: Set solid white backgrounds (`bg-white`) for all Metric cards, keeping their accent-colored borders. Centered the logo (`ShieldCheck`) and removed the chevron toggle arrow in collapsed sidebar mode, using the logo itself to expand. Replaced the top header controls' fixed CSS grid layout with a fluid flex-wrap layout and clean responsive widths to resolve layout overlap when the sidebar is expanded. Reverted tabbed layout on Trajectory and Audit Events pages, displaying both components side-by-side in responsive grids (`xl:grid-cols-[1.2fr_0.8fr]` and `xl:grid-cols-[1.1fr_0.9fr]` respectively) to enable viewing both views simultaneously without squeeze. Production Next.js build and type validations pass successfully.
+- Policy management UI is implemented against `agentlens.config.yaml`. The backend now
+  exposes `GET /policies`, `PUT /policies`, and `POST /policies/test`; saves validate
+  typed policy rules and replace the YAML config atomically. The frontend Policy Ledger
+  page now loads configured rules, lets users create/edit/duplicate/delete/reorder rules,
+  save or reload the config, and test unsaved drafts against representative tool calls.
+- Explain More now includes backend-backed gate Q&A through
+  `POST /gates/{gate_id}/questions`. Answers are grounded in visible trace metadata,
+  policy/risk evidence, dependency evidence, git excerpts, and current intelligence-card
+  context. Without OpenAI credentials the endpoint returns deterministic fallback answers;
+  with credentials it uses cost-aware summary routing.
+- Validation passed after policy management and explain-Q&A changes: frontend
+  `npm run build` passed, backend
+  `UV_CACHE_DIR=.uv-cache env -u AGENTLENS_DISABLE_HOOKS uv run pytest tests/test_session_api.py tests/test_policy_risk.py`
+  reported 25 passed with 1 warning, targeted backend `ruff check` passed, and
+  `UV_CACHE_DIR=.uv-cache env -u AGENTLENS_DISABLE_HOOKS uv run pytest
+  tests/test_openai_integration.py` passed with network access allowed.
+- Policy Ledger layout polish tightened the policy-management page into a bounded
+  two-column layout: editable rules and runtime matches stay in the left stack, the
+  simulator stays in a fixed-width right rail, panels opt into `min-w-0`, and policy
+  controls now have consistent hover/focus/pressed feedback. The dirty-state badge now
+  compares normalized policy payloads so it only appears after real draft changes.
+  Validation passed: frontend `npm run build` passed, and a Playwright visual smoke
+  confirmed the Policy Ledger had no page-level horizontal overflow at 1280, 1440,
+  1920, and 2048px.
 
 ## Known Gaps
 
@@ -282,6 +306,5 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 3. Live-test `agentlens-run` with a read-only inspection task, a small README write, and a blocked risky action while the dashboard is open.
 4. Live-test two simultaneous `agentlens-run` terminals and confirm the session picker/pinned URLs route approvals to the intended terminal.
 5. Capture app-server permission-profile, MCP, and network approval payloads and harden the permission response mapping.
-6. Add read/test policy management UI on top of `agentlens.config.yaml`.
-7. Keep project hooks as passive/local-TUI observability and use `agentlens-run` whenever strict pre-execution gating is required.
-8. Review the frontend npm audit finding before forcing dependency changes; the available audit fix is breaking.
+6. Keep project hooks as passive/local-TUI observability and use `agentlens-run` whenever strict pre-execution gating is required.
+7. Review the frontend npm audit finding before forcing dependency changes; the available audit fix is breaking.

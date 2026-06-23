@@ -150,6 +150,57 @@ def test_session_analytics_endpoint(monkeypatch) -> None:
     assert body["risk_distribution"]
 
 
+def test_policy_management_endpoints_round_trip_config(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("agentlens.api.PROJECT_ROOT", tmp_path)
+    (tmp_path / "agentlens.config.yaml").write_text(
+        """
+policies:
+  - name: safe reads
+    condition:
+      tool_in:
+        - fs.read
+    action: auto_execute
+""",
+        encoding="utf-8",
+    )
+    client = TestClient(app)
+
+    response = client.get("/policies")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["policies"][0]["name"] == "safe reads"
+
+    updated = {
+        "policies": [
+            {
+                "name": "protect readme",
+                "condition": {"path_contains": ["README.md"]},
+                "action": "require_approval",
+                "min_confidence": 0.0,
+            }
+        ]
+    }
+    save_response = client.put("/policies", json=updated)
+    assert save_response.status_code == 200
+    assert "protect readme" in (tmp_path / "agentlens.config.yaml").read_text(encoding="utf-8")
+
+    test_response = client.post(
+        "/policies/test",
+        json={
+            "policies": updated["policies"],
+            "risk_level": "medium",
+            "proposal": {
+                "session_id": "policy_test",
+                "tool_name": "fs.write",
+                "params": {"path": "README.md"},
+                "confidence": 0.7,
+            },
+        },
+    )
+    assert test_response.status_code == 200
+    assert test_response.json()["decision"]["matched_policy"] == "protect readme"
+
+
 def test_audit_events_endpoint_returns_recent_events(monkeypatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "replace_me")
     client = TestClient(app)
@@ -161,6 +212,35 @@ def test_audit_events_endpoint_returns_recent_events(monkeypatch) -> None:
     body = response.json()
     assert len(body["events"]) <= 2
     assert body["events"]
+
+
+def test_gate_question_endpoint_answers_from_visible_evidence(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "replace_me")
+    client = TestClient(app)
+    session_id = client.post(
+        "/sessions",
+        json={"original_instruction": "Review writes.", "repo_path": str(tmp_path)},
+    ).json()["id"]
+    gate = client.post(
+        f"/sessions/{session_id}/tool-calls",
+        json={
+            "session_id": session_id,
+            "tool_name": "fs.write",
+            "params": {"path": "README.md"},
+            "confidence": 0.8,
+        },
+    ).json()
+
+    response = client.post(
+        f"/gates/{gate['id']}/questions",
+        json={"question": "Why is this risky?"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["gate_id"] == gate["id"]
+    assert body["used_model_role"] == "deterministic_fallback"
+    assert "risk" in body["answer"].lower()
 
 
 def test_gate_decision_endpoint_resolves_pending_gate(tmp_path: Path, monkeypatch) -> None:

@@ -33,6 +33,24 @@ export type PolicyDecision = {
   reason: string;
 };
 
+export type PolicyRule = {
+  name: string;
+  condition: Record<string, unknown>;
+  action: "auto_execute" | "require_approval" | "block_and_alert";
+  min_confidence: number | null;
+};
+
+export type PolicyConfigResponse = {
+  config_path: string;
+  policies: PolicyRule[];
+  supported_conditions: Record<string, string>;
+  supported_actions: PolicyRule["action"][];
+};
+
+export type PolicyTestResponse = {
+  decision: PolicyDecision;
+};
+
 export type RiskAssessment = {
   reversibility: string;
   blast_radius: string;
@@ -126,4 +144,12 @@ export type ExplainMoreResponse = {
   dependency_evidence: IntelligenceCard["dependency_evidence"];
   suggested_modification: string | null;
   context_summary: string;
+};
+
+export type GateQuestionResponse = {
+  gate_id: string;
+  question: string;
+  answer: string;
+  evidence: string[];
+  used_model_role: string;
 };

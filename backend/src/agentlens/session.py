@@ -11,6 +11,7 @@ from agentlens.schemas import (
     DependencyEvidence,
     ExplainMoreResponse,
     Gate,
+    GateQuestionResponse,
     GateStatus,
     PolicyAction,
     PolicyDecision,
@@ -116,6 +117,32 @@ class AgentLensSession:
             context_summary=self._session_summary(),
         )
 
+    def answer_question(self, gate_id: str, question: str) -> GateQuestionResponse:
+        gate = self.storage.gates.get(gate_id)
+        if gate is None or gate.session_id != self.session.id:
+            raise KeyError(gate_id)
+        trace = self._trace_for_gate(gate)
+        proposal = ToolCallProposal(
+            id=gate.proposal_id,
+            session_id=gate.session_id,
+            tool_name=trace.tool_name if trace else "unknown",
+            params=trace.params if trace else {},
+            stated_reason=trace.stated_reason if trace else None,
+            confidence=gate.intelligence_card.confidence if gate.intelligence_card else None,
+            provider_metadata={"source": "stored_trace"},
+        )
+        event = trace or self.trace_engine.capture(proposal, self.session.repo_path)
+        context = self._decision_context(proposal, event, gate.risk_assessment, gate.policy_decision)
+        if gate.intelligence_card:
+            context.dependency_evidence = gate.intelligence_card.dependency_evidence
+        result = self.intelligence.answer_gate_question(
+            question=question,
+            context=context,
+            gate_summary=gate.intelligence_card.summary if gate.intelligence_card else None,
+        )
+        result.gate_id = gate.id
+        return result
+
     def _decision_context(
         self,
         proposal: ToolCallProposal,
@@ -192,6 +219,10 @@ class AgentLensSession:
         if files:
             return f"Inspect references for {files}, then propose the smallest reversible change."
         return "Ask the agent to restate the intended effect and provide a lower-risk command or patch."
+
+    def _trace_for_gate(self, gate: Gate) -> TraceEvent | None:
+        traces, _ = self.storage.timeline(gate.session_id)
+        return next((trace for trace in traces if trace.proposal_id == gate.proposal_id), None)
 
     def _uses_fast_intelligence(self, proposal: ToolCallProposal) -> bool:
         return (

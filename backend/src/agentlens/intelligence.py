@@ -4,6 +4,7 @@ import math
 import os
 
 from openai import OpenAI
+from pydantic import BaseModel, Field
 
 from agentlens.config import Settings
 from agentlens.model_routing import ModelRouter
@@ -12,6 +13,7 @@ from agentlens.schemas import (
     ConfidenceEvidence,
     DecisionContext,
     DriftAssessment,
+    GateQuestionResponse,
     IntelligenceCard,
     ModelRole,
     PolicyAction,
@@ -22,6 +24,11 @@ from agentlens.schemas import (
     TrajectoryStep,
     TranslationResult,
 )
+
+
+class QuestionAnswerDraft(BaseModel):
+    answer: str = Field(max_length=900)
+    evidence: list[str] = Field(default_factory=list)
 
 
 class IntelligenceLayer:
@@ -216,6 +223,57 @@ class IntelligenceLayer:
         )
         return response.output_parsed
 
+    def answer_gate_question(
+        self,
+        *,
+        question: str,
+        context: DecisionContext,
+        gate_summary: str | None,
+    ) -> GateQuestionResponse:
+        evidence = self._question_evidence(context, gate_summary)
+        if not self.settings.has_openai_key:
+            return GateQuestionResponse(
+                gate_id="",
+                question=question,
+                answer=self._fallback_question_answer(question, context, evidence),
+                evidence=evidence,
+                used_model_role="deterministic_fallback",
+            )
+
+        role = self.router.role_for_summary(context.risk.risk_level)
+        response = self.client.responses.parse(
+            model=self.router.model_for(role),
+            input=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Answer a developer's question about an AgentLens gate. Use only "
+                        "the provided visible trace metadata, policy, risk, trajectory, "
+                        "confidence, dependency evidence, and git excerpts. Do not reveal "
+                        "or invent hidden chain-of-thought. Keep the answer under 120 words."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Question: {question}\n"
+                        f"{self._context_prompt(context)}\n"
+                        f"Gate summary: {gate_summary}\n"
+                        f"Evidence snippets: {evidence}"
+                    ),
+                },
+            ],
+            text_format=QuestionAnswerDraft,
+        )
+        draft = response.output_parsed
+        return GateQuestionResponse(
+            gate_id="",
+            question=question,
+            answer=draft.answer,
+            evidence=draft.evidence or evidence[:5],
+            used_model_role=role.value,
+        )
+
     def _context_prompt(self, context: DecisionContext) -> str:
         proposal = context.proposal
         recent_traces = [
@@ -243,6 +301,48 @@ class IntelligenceLayer:
             f"Git status: {context.git_snapshot.status_short[:1200]}\n"
             f"Git diff excerpt: {context.git_snapshot.diff[:2400]}"
         )
+
+    def _question_evidence(self, context: DecisionContext, gate_summary: str | None) -> list[str]:
+        evidence: list[str] = []
+        if gate_summary:
+            evidence.append(f"Summary: {gate_summary}")
+        evidence.append(f"Tool: {context.proposal.tool_name}")
+        evidence.append(f"Policy: {context.policy.action} ({context.policy.reason})")
+        evidence.append(f"Risk: {context.risk.risk_level}; evidence: {context.risk.evidence[:3]}")
+        if context.dependency_evidence:
+            evidence.append(
+                "Dependency evidence: "
+                + "; ".join(item.summary for item in context.dependency_evidence[:3])
+            )
+        if context.git_snapshot.status_short:
+            evidence.append(f"Git status: {context.git_snapshot.status_short[:300]}")
+        return evidence[:6]
+
+    def _fallback_question_answer(
+        self,
+        question: str,
+        context: DecisionContext,
+        evidence: list[str],
+    ) -> str:
+        lower = question.lower()
+        if "policy" in lower:
+            return (
+                f"The policy decision is {context.policy.action}. "
+                f"AgentLens chose it because {context.policy.reason}."
+            )
+        if "risk" in lower or "why" in lower:
+            first = context.risk.evidence[0] if context.risk.evidence else "no specific evidence"
+            return (
+                f"This is {context.risk.risk_level} risk with {context.risk.blast_radius} blast radius. "
+                f"The main evidence is: {first}."
+            )
+        if "dependency" in lower or "file" in lower:
+            if context.dependency_evidence:
+                return context.dependency_evidence[0].summary
+            return "No dependency references were recorded for this gate."
+        if evidence:
+            return f"AgentLens can answer from visible session evidence. {evidence[0]}"
+        return "No additional visible evidence was recorded for this gate."
 
     def _confidence_factors(
         self, proposal: ToolCallProposal, risk: RiskAssessment

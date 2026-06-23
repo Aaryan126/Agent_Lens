@@ -347,7 +347,7 @@ export default function Home() {
       {activeView === "trajectory" ? (
         <TrajectoryView gates={gates} traces={traces} traceByProposal={traceByProposal} />
       ) : null}
-      {activeView === "policies" ? <PolicyLedgerView gates={gates} /> : null}
+      {activeView === "policies" ? <PolicyLedgerView gates={gates} apiUrl={apiUrl} /> : null}
       {activeView === "slack" ? (
         <SlackSurfaceView
           channel={slackChannel}

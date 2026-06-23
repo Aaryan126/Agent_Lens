@@ -388,20 +388,39 @@ Second follow-up status: Console UI layout, sidebar, topbar controls, and metric
 
 ## Phase 14: Policy Management UI
 
-Add policy read/test management without making config editing the first step.
+Make the PRD policy engine manageable from the session ledger instead of only through
+manual YAML edits.
 
 Automatic validation:
-- `GET /policies` returns configured `agentlens.config.yaml` policy rules.
-- `POST /policies/evaluate` tests a synthetic proposal against current policy order.
-- Frontend build passes with the policy page connected to the new endpoints.
+- Policy config endpoints load, validate, save, and test draft policy rules.
+- Backend policy/risk/session API tests remain green.
+- Backend ruff passes for touched files.
+- Frontend production build passes with the editable policy page.
 
 Human validation:
-- Open Policy Ledger and see configured policies, not only runtime matches.
-- Test at least three synthetic actions and confirm the predicted policy matches current
-  behavior.
+- Open the Policy Ledger view.
+- Create or edit a rule, test it against a sample proposal, save it, reload the page, and
+  confirm the rule persists in `agentlens.config.yaml`.
+- Run a Codex write prompt and confirm the policy ledger still shows runtime matches.
 
-Status: planned next. Editing and reordering policies should wait until the read/test
-surface is stable.
+Status: first implementation complete. The backend exposes `GET /policies`,
+`PUT /policies`, and `POST /policies/test`, all backed by the repo's
+`agentlens.config.yaml`. Policy saves are normalized YAML writes through a temporary file
+replace, and draft policy tests use the same ordered `PolicyEngine` path as live gates.
+The frontend Policy Ledger page now includes a rule editor, create/duplicate/delete,
+reorder controls, save/reload actions, and a draft simulator for representative tool
+calls. Validation passed: frontend `npm run build`, backend
+`UV_CACHE_DIR=.uv-cache env -u AGENTLENS_DISABLE_HOOKS uv run pytest tests/test_session_api.py tests/test_policy_risk.py`
+reported 25 passed with 1 warning, full backend non-integration validation reported
+83 passed with 2 integration tests deselected and 1 warning, targeted backend ruff
+passed, and real OpenAI integration tests reported 2 passed with network access.
+
+Follow-up status: Explain More now supports backend-backed gate questions through
+`POST /gates/{gate_id}/questions`. Answers are grounded in visible trace metadata,
+risk/policy evidence, dependency evidence, git excerpts, and intelligence-card context.
+The deterministic fallback is used without OpenAI credentials; OpenAI-backed answers use
+cost-aware routing when credentials are configured. The frontend Explain tab now posts
+questions to the backend and displays answer evidence plus the model/fallback role.
 
 ## Phase 14A: One-Command Local Stack
 

@@ -84,3 +84,13 @@ def load_config(config_path: str | os.PathLike[str]) -> AgentLensConfig:
         return AgentLensConfig()
     raw = yaml.safe_load(path.read_text()) or {}
     return AgentLensConfig.model_validate(raw)
+
+
+def save_config(config_path: str | os.PathLike[str], config: AgentLensConfig) -> None:
+    path = Path(config_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = config.model_dump(mode="json", exclude_none=True)
+    rendered = yaml.safe_dump(payload, sort_keys=False, allow_unicode=False)
+    temporary = path.with_suffix(f"{path.suffix}.tmp")
+    temporary.write_text(rendered, encoding="utf-8")
+    temporary.replace(path)
