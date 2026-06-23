@@ -212,6 +212,11 @@ def modify_gate(gate_id: str, payload: DecisionPayload) -> Gate:
     return _resolve_gate(gate_id, GateStatus.MODIFIED, payload)
 
 
+@app.post("/gates/{gate_id}/observe")
+def observe_gate(gate_id: str, payload: DecisionPayload) -> Gate:
+    return _resolve_gate(gate_id, GateStatus.AUTO_EXECUTED, payload)
+
+
 @app.post("/gates/{gate_id}/explain")
 def explain_gate(gate_id: str) -> ExplainMoreResponse:
     gate = store.gates.get(gate_id)

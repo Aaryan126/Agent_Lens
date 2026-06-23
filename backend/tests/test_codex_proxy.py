@@ -367,6 +367,7 @@ async def test_proxy_auto_executed_gate_returns_upstream_accept(fake_async_clien
 async def test_proxy_mirrors_passive_command_events_once(fake_async_client) -> None:
     fake_async_client.responses.extend(
         [
+            {"id": "gate_passive", "status": "pending"},
             {"id": "gate_passive", "status": "auto_executed"},
             {"id": "gate_duplicate", "status": "auto_executed"},
         ]
@@ -404,6 +405,9 @@ async def test_proxy_mirrors_passive_command_events_once(fake_async_client) -> N
     assert tool_call_posts[0][2]["tool_name"] == "shell.run"
     assert tool_call_posts[0][2]["params"]["command"] == "rg --files"
     assert tool_call_posts[0][2]["provider_metadata"]["passive"] is True
+    observe_posts = [request for request in fake_async_client.requests if request[1].endswith("/observe")]
+    assert len(observe_posts) == 1
+    assert observe_posts[0][1] == "http://agentlens.test/gates/gate_passive/observe"
 
 
 @pytest.mark.asyncio

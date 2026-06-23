@@ -233,6 +233,13 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
   passed, targeted backend ruff passed, frontend `npm run build` passed, and full backend
   non-integration tests reported 80 passed with 2 integration tests deselected and 1
   existing Starlette/httpx deprecation warning.
+- Passive app-server telemetry is now explicitly treated as already-executed observation.
+  If Codex emits a non-approval command/read event and the risk layer would otherwise leave
+  it pending, the proxy marks the gate `auto_executed` through `POST /gates/{gate_id}/observe`
+  with an audit reason. This prevents read/search telemetry rows from remaining pending
+  after the native TUI has already continued. Validation passed: targeted proxy,
+  app-server, session API, and dev-stack tests reported 37 passed with 1 existing
+  Starlette/httpx deprecation warning, and targeted backend ruff passed.
 - Frontend operator console polish pass: the sidebar is now sticky, full-height, and
   collapsible to an icon-only mode with its bottom status indicators always visible.
   Main-page spacing was tightened to a consistent `gap-5` rhythm, the gate queue table

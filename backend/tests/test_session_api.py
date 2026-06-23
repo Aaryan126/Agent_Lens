@@ -193,6 +193,41 @@ def test_gate_decision_endpoint_resolves_pending_gate(tmp_path: Path, monkeypatc
     assert resolved["human_reason"] == "Scoped write is acceptable."
 
 
+def test_gate_observe_endpoint_marks_pending_gate_auto_executed(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "replace_me")
+    client = TestClient(app)
+    session_response = client.post(
+        "/sessions",
+        json={"original_instruction": "Observe read command.", "repo_path": str(tmp_path)},
+    )
+    session_id = session_response.json()["id"]
+    proposal_response = client.post(
+        f"/sessions/{session_id}/tool-calls",
+        json={
+            "session_id": session_id,
+            "tool_name": "shell.run",
+            "params": {"command": "sed -n '1,80p' README.md", "cwd": str(tmp_path)},
+            "stated_reason": "Passive app-server telemetry.",
+        },
+    )
+    gate = proposal_response.json()
+    if gate["status"] != "pending":
+        return
+
+    observe_response = client.post(
+        f"/gates/{gate['id']}/observe",
+        json={"reason": "Observed after execution."},
+    )
+
+    assert observe_response.status_code == 200
+    observed = observe_response.json()
+    assert observed["status"] == "auto_executed"
+    assert observed["human_reason"] == "Observed after execution."
+
+
 def test_get_gate_endpoint_returns_single_gate(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "replace_me")
     client = TestClient(app)

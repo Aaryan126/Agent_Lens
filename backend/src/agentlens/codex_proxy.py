@@ -223,7 +223,11 @@ class AgentLensProxyState:
         if len(self.passive_event_signatures) > 200:
             self.passive_event_signatures = set(list(self.passive_event_signatures)[-100:])
         try:
-            await self._post_proposal(proposal)
+            gate = await self._post_proposal(proposal)
+            if str(gate.get("status") or "") == "pending":
+                gate_id = str(gate.get("id") or "")
+                if gate_id:
+                    await self._mark_passive_observed(gate_id)
         except httpx.HTTPError:
             return
 
@@ -232,6 +236,19 @@ class AgentLensProxyState:
             response = await client.post(
                 f"{self.api_url}/gates/{gate_id}/{action}",
                 json={"reason": reason},
+            )
+            response.raise_for_status()
+
+    async def _mark_passive_observed(self, gate_id: str) -> None:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                f"{self.api_url}/gates/{gate_id}/observe",
+                json={
+                    "reason": (
+                        "Observed from Codex app-server telemetry after execution; no "
+                        "native approval was available for this event."
+                    )
+                },
             )
             response.raise_for_status()
 
