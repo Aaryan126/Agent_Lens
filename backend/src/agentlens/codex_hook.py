@@ -79,7 +79,11 @@ def main() -> None:
             payload=payload,
             event_name=args.event,
         )
-    proposal = _proposal_from_hook(payload, event_name=args.event, session_id=session_id)
+    state = _load_session_state(session_file)
+    latest_prompt = state.get("latest_prompt") or "Interactive Codex TUI session"
+    proposal = _proposal_from_hook(
+        payload, event_name=args.event, session_id=session_id, latest_prompt=latest_prompt
+    )
     if proposal is None:
         return
     signature = _proposal_signature(proposal)
@@ -188,9 +192,15 @@ def _create_session(
         response.raise_for_status()
         session_id = str(response.json()["id"])
 
-    state = {"session_id": session_id, "api_url": api_url, "recent_proposals": []}
+    state = {
+        "session_id": session_id,
+        "api_url": api_url,
+        "recent_proposals": [],
+        "latest_prompt": original_instruction,
+    }
     if not reset_recent:
         state["recent_proposals"] = _load_session_state(session_file).get("recent_proposals", [])[-20:]
+        state["latest_prompt"] = _load_session_state(session_file).get("latest_prompt") or original_instruction
     _write_session_state(session_file, state)
     return session_id
 
@@ -301,7 +311,7 @@ def _deny(gate: dict[str, Any], message: str) -> None:
 
 
 def _proposal_from_hook(
-    payload: dict[str, Any], *, event_name: str, session_id: str
+    payload: dict[str, Any], *, event_name: str, session_id: str, latest_prompt: str
 ) -> ToolCallProposal | None:
     tool_name = _extract_tool_name(payload, event_name)
     params = _extract_params(payload)
@@ -309,7 +319,7 @@ def _proposal_from_hook(
     if normalized is None:
         return None
 
-    return ToolCallProposal(
+    proposal = ToolCallProposal(
         session_id=session_id,
         tool_name=normalized,
         params=params,
@@ -321,6 +331,8 @@ def _proposal_from_hook(
             "fast_intelligence": True,
         },
     )
+    proposal.params["agentlens_prompt"] = latest_prompt
+    return proposal
 
 
 def _extract_tool_name(payload: dict[str, Any], event_name: str) -> str:

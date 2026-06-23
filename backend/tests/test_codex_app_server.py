@@ -174,6 +174,7 @@ def test_agentlens_approval_bridge_polls_pending_gate(monkeypatch) -> None:
         api_url="http://127.0.0.1:8787",
         session_id="ses_app",
         approval_timeout=5,
+        prompt="Edit README.",
     ).handle(proposal, {"id": 1})
 
     assert approval.decision == GateStatus.APPROVED
@@ -228,6 +229,7 @@ def test_agentlens_approval_bridge_accepts_terminal_decision(monkeypatch) -> Non
         api_url="http://127.0.0.1:8787",
         session_id="ses_app",
         approval_timeout=5,
+        prompt="Edit README.",
         terminal_decision_reader=lambda: ("approve", None),
     ).handle(proposal, {"id": 1})
 

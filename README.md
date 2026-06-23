@@ -2,8 +2,6 @@
 
 AgentLens is a judgment layer for AI coding agents. It intercepts proposed tool calls, enriches them with codebase and session context, decides whether a human should review them, and records the full session in an audit-friendly ledger.
 
-It is built with a Python/FastAPI backend, a Next.js/TypeScript frontend, Pydantic schemas, OpenAI intelligence calls, SQLite/PostgreSQL storage, and local Codex app-server integrations.
-
 The current build is local-first: Codex can run normally in the terminal while project-local hooks mirror proposed tool calls into a local AgentLens guard. The hosted demo path remains available for judging, Slack validation, and remote review.
 
 ## Current Architecture

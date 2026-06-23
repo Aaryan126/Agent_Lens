@@ -96,6 +96,7 @@ class AgentLensProxyState:
             session_id=session_id,
         )
         proposal = self._with_recent_target_hints(proposal)
+        proposal.params["agentlens_prompt"] = self.latest_prompt
         gate = await self._post_proposal(proposal)
         status = str(gate.get("status") or "")
         gate_id = str(gate.get("id") or "")
@@ -222,6 +223,7 @@ class AgentLensProxyState:
         )
         if proposal is None:
             return
+        proposal.params["agentlens_prompt"] = self.latest_prompt
         self._remember_target_hints(_proposal_target_hints(proposal))
         signature = _passive_event_signature(proposal)
         if signature in self.passive_event_signatures:

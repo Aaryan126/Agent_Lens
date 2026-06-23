@@ -74,40 +74,102 @@ export function FlowMapView(props: FlowMapViewProps) {
   );
 }
 
+type TaskGroup = {
+  prompt: string;
+  items: FlowItem[];
+};
+
+function getItemPrompt(item: FlowItem, sessionPrompt: string | undefined): string {
+  const trace = item.kind === "trace" ? item.trace : item.trace;
+  const prompt = trace?.params?.agentlens_prompt;
+  if (typeof prompt === "string" && prompt.trim()) {
+    return prompt.trim();
+  }
+  return sessionPrompt || "Original Task";
+}
+
 function FlowMapInner({ session, gates, traces, traceByProposal, onSelectGate }: FlowMapViewProps) {
   const { fitView } = useReactFlow();
   const [mounted, setMounted] = useState(false);
   const ordered = useMemo(() => buildOrderedItems(gates, traces, traceByProposal), [gates, traces, traceByProposal]);
 
+  const groups = useMemo(() => {
+    const list: TaskGroup[] = [];
+    ordered.forEach((item) => {
+      const prompt = getItemPrompt(item, session?.original_instruction);
+      let lastGroup = list[list.length - 1];
+      if (!lastGroup || lastGroup.prompt !== prompt) {
+        lastGroup = { prompt, items: [] };
+        list.push(lastGroup);
+      }
+      lastGroup.items.push(item);
+    });
+    return list;
+  }, [ordered, session?.original_instruction]);
+
   const { nodes, edges } = useMemo(() => {
     const nodes: Node<FlowNodeData>[] = [];
     const edges: Edge[] = [];
 
-    nodes.push(startNode(session));
+    let currentRow = 0;
 
-    ordered.forEach((item, index) => {
-      const previousId = index === 0 ? "start" : itemId(ordered[index - 1]);
-      const id = itemId(item);
-      const position = gridPosition(index + 1);
+    groups.forEach((group, groupIndex) => {
+      const startId = `start_${groupIndex}`;
+      const endId = `end_${groupIndex}`;
 
-      if (item.kind === "trace") {
-        nodes.push(traceNode(id, item.trace, position));
-      } else {
-        nodes.push(gateNode(id, item.gate, item.trace, position, onSelectGate));
+      // Start node for this task group
+      nodes.push({
+        id: startId,
+        type: "start",
+        position: { x: 0, y: currentRow * (NODE_HEIGHT + GAP_Y) + (NODE_HEIGHT / 4) },
+        data: {
+          instruction: group.prompt,
+          label: groupIndex === 0 ? "Original Task" : `Task ${groupIndex + 1}`,
+        },
+      });
 
-      }
-      edges.push(flowEdge(previousId, id, item.kind === "gate" ? item.gate : null));
+      let lastId = startId;
+
+      group.items.forEach((item, itemIndex) => {
+        const nodeIndexInGroup = itemIndex + 1;
+        const col = nodeIndexInGroup % ROW_CAPACITY;
+        const rowOffset = Math.floor(nodeIndexInGroup / ROW_CAPACITY);
+        const x = col * (NODE_WIDTH + GAP_X);
+        const y = (currentRow + rowOffset) * (NODE_HEIGHT + GAP_Y);
+        const id = itemId(item);
+
+        if (item.kind === "trace") {
+          nodes.push(traceNode(id, item.trace, { x, y }));
+        } else {
+          nodes.push(gateNode(id, item.gate, item.trace, { x, y }, onSelectGate));
+        }
+
+        edges.push(flowEdge(lastId, id, item.kind === "gate" ? item.gate : null));
+        lastId = id;
+      });
+
+      // End node for this task group
+      const endNodeIndex = group.items.length + 1;
+      const endCol = endNodeIndex % ROW_CAPACITY;
+      const endRowOffset = Math.floor(endNodeIndex / ROW_CAPACITY);
+      const endX = endCol * (NODE_WIDTH + GAP_X);
+      const endY = (currentRow + endRowOffset) * (NODE_HEIGHT + GAP_Y);
+
+      nodes.push({
+        id: endId,
+        type: "end",
+        position: { x: endX, y: endY },
+        data: {},
+      });
+
+      edges.push(flowEdge(lastId, endId, null));
+
+      // Calculate total rows in this group: max rowOffset of any node in the group
+      currentRow += endRowOffset + 1.8; // Space between flowcharts
     });
 
-    if (ordered.length > 0) {
-      const lastId = itemId(ordered[ordered.length - 1]);
-      const endPosition = gridPosition(ordered.length + 1);
-      nodes.push(endNode(endPosition));
-      edges.push(flowEdge(lastId, "end", null));
-    }
-
     return { nodes, edges };
-  }, [ordered, session, onSelectGate]);
+  }, [groups, onSelectGate]);
 
   useEffect(() => {
     setMounted(true);
@@ -217,7 +279,7 @@ function StartNode({ data }: { data: FlowNodeData }) {
         <div className="flex h-8 w-8 items-center justify-center rounded-md bg-white/10">
           <Play size={16} className="text-white" />
         </div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Original Task</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">{data.label || "Original Task"}</p>
       </div>
       <p className="mt-3 line-clamp-4 text-sm font-medium leading-relaxed">{data.instruction || "No instruction set."}</p>
       <Handle type="source" position={Position.Right} className="!bg-white" />
@@ -330,6 +392,7 @@ type FlowItem =
 
 type FlowNodeData = {
   instruction?: string;
+  label?: string;
   toolLabel?: string;
   target?: string;
   reason?: string | null;

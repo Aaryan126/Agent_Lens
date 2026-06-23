@@ -310,12 +310,15 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
   left-to-right in rows, avoiding the snake routing that produced dangling-looking edges.
   Gate node headers are compacted so tool label, confidence, and status fit on one line,
   the redundant risk badge is removed, and the MiniMap was removed because it appeared as
-  an unexplained white rectangle. Predicted trajectory future steps were removed from the
-  graph itself to prevent overlap and keep the flow clean; the trajectory detail remains
-  available in the Review Queue inspector. Clicking a gate selects it and switches back to
-  the Review Queue inspector. The view uses only the existing backend endpoints
-  (`/sessions/{id}/timeline`) and does not require backend changes. It is accessible from
-  the sidebar and production Next.js `npm run build` passes.
+  an unexplained white rectangle. The Flow Map has been enhanced to recognize and group
+  multiple sequential tasks/prompts executed in the same session (propagating the active
+  prompt via `"agentlens_prompt"` params in proxy, terminal, and hook modes), generating
+  separate unconnected flowcharts on the same canvas, each starting with its task prompt
+  and ending with a "Task Complete" card. Predicted trajectory future steps ("likely next"
+  nodes) are completely removed from the graph view to keep the layout clean, with their
+  details remaining in the Review Queue inspector. Clicking a gate selects it and switches
+  back to the Review Queue inspector. The view is accessible from the sidebar and Next.js
+  production build compiles successfully.
 
 ## Known Gaps
 

@@ -104,6 +104,7 @@ def _run_one(
         session_id=session_id,
         dashboard_url=dashboard_url,
         approval_timeout=args.approval_timeout,
+        prompt=prompt,
     )
     result = CodexAppServerAdapter().run_turn(
         prompt=prompt,
@@ -127,16 +128,19 @@ class AgentLensApprovalBridge:
         api_url: str,
         session_id: str,
         approval_timeout: int,
+        prompt: str,
         dashboard_url: str | None = None,
         terminal_decision_reader: Callable[[], TerminalDecision | None] | None = None,
     ) -> None:
         self.api_url = api_url
         self.session_id = session_id
+        self.prompt = prompt
         self.dashboard_url = dashboard_url.rstrip("/") if dashboard_url else None
         self.approval_timeout = approval_timeout
         self.terminal_decision_reader = terminal_decision_reader or self._read_terminal_decision
 
     def handle(self, proposal: ToolCallProposal, request: dict[str, Any]) -> AppServerApproval:
+        proposal.params["agentlens_prompt"] = self.prompt
         gate = self._post_proposal(proposal)
         status = str(gate.get("status") or "")
         gate_id = str(gate.get("id") or "")

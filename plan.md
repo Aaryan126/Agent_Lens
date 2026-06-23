@@ -388,10 +388,10 @@ Second follow-up status: Console UI layout, sidebar, topbar controls, and metric
 
 Third follow-up status: A new "Flow Map" view is added as an alternative supervision
 surface alongside the existing Review Queue. It visualizes the session as a connected
-React Flow graph (original instruction → traces → gates → predicted trajectory steps)
-with risk-coded cards, animated pending edges, minimap, and clickable gates that return
-to the Review Queue inspector. The implementation uses only existing backend endpoints
-and requires no backend changes. Production Next.js `npm run build` passes.
+React Flow graph (original instruction → traces → gates). The view has been upgraded
+to support grouping multiple sequential tasks/prompts executed in the same session
+into separate, unconnected flowcharts. Predicted trajectory future steps ("likely next"
+nodes) are completely removed from the graph itself to keep the layout clean. Production Next.js `npm run build` passes.
 
 ## Phase 14: Policy Management UI
 
