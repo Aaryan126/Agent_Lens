@@ -57,6 +57,7 @@ import {
   Background,
   Controls,
   ReactFlow,
+  ReactFlowProvider,
   type Edge,
   type Node,
   Position,
@@ -936,27 +937,46 @@ export function DependencyGraph({ gate }: { gate: Gate }) {
   }
   const referenced = primary.referenced_by.slice(0, 8);
   const config = primary.config_references.slice(0, 4);
+  const targetY = Math.max(90, ((referenced.length - 1) * 62) / 2);
   const nodes: Node[] = [
     {
       id: "target",
-      position: { x: 260, y: 90 },
+      position: { x: 220, y: targetY },
       sourcePosition: Position.Right,
       targetPosition: Position.Left,
-      data: { label: primary.path },
-      className: "rounded-md border border-neutral-950 bg-white px-3 py-2 text-xs font-semibold shadow-sm",
+      data: {
+        label: (
+          <div title={primary.path} className="truncate max-w-[150px] font-semibold" style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+            {primary.path}
+          </div>
+        ),
+      },
+      className: "rounded-md border border-neutral-950 bg-white px-3 py-2 text-xs shadow-sm",
     },
     ...referenced.map((path, index) => ({
       id: `code-${index}`,
       position: { x: 20, y: index * 62 },
       sourcePosition: Position.Right,
-      data: { label: path },
+      data: {
+        label: (
+          <div title={path} className="truncate max-w-[150px]" style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+            {path}
+          </div>
+        ),
+      },
       className: "rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-950",
     })),
     ...config.map((path, index) => ({
       id: `config-${index}`,
-      position: { x: 520, y: index * 62 },
+      position: { x: 420, y: index * 62 },
       targetPosition: Position.Left,
-      data: { label: path },
+      data: {
+        label: (
+          <div title={path} className="truncate max-w-[150px]" style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+            {path}
+          </div>
+        ),
+      },
       className: "rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950",
     })),
   ];
@@ -967,10 +987,20 @@ export function DependencyGraph({ gate }: { gate: Gate }) {
   return (
     <div>
       <div className="h-64 overflow-hidden rounded-md border border-neutral-200 bg-white">
-        <ReactFlow nodes={nodes} edges={edges} fitView nodesDraggable={false} nodesConnectable={false} elementsSelectable={false}>
-          <Background gap={18} size={1} />
-          <Controls showInteractive={false} />
-        </ReactFlow>
+        <ReactFlowProvider>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            fitView
+            fitViewOptions={{ padding: 0.2 }}
+            nodesDraggable={false}
+            nodesConnectable={false}
+            elementsSelectable={false}
+          >
+            <Background gap={18} size={1} />
+            <Controls showInteractive={false} />
+          </ReactFlow>
+        </ReactFlowProvider>
       </div>
       <p className="mt-2 text-xs leading-5 text-neutral-500">{primary.summary}</p>
       {primary.referenced_by.length + primary.config_references.length > referenced.length + config.length ? (
