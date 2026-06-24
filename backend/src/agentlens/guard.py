@@ -39,7 +39,7 @@ def main() -> None:
         "http://127.0.0.1:3001",
         *args.cors_origin,
     ]
-    os.environ.setdefault("AGENTLENS_STORAGE_BACKEND", "memory")
+    os.environ.setdefault("AGENTLENS_STORAGE_BACKEND", "local_jsonl")
     os.environ.setdefault("AGENTLENS_PROJECT_ROOT", str(repo))
     os.environ.setdefault("AGENTLENS_AUDIT_LOG_PATH", args.audit_log)
     os.environ.setdefault("AGENTLENS_CORS_ORIGINS", ",".join(origins))
@@ -48,6 +48,7 @@ def main() -> None:
     print("AgentLens local guard is starting.")
     print(f"Repo: {repo}")
     print(f"API:  {local_api}")
+    print(f"History: {Path(args.audit_log).expanduser().resolve()}")
     print("Dashboard:")
     print("  # from the Agent_Lens project root")
     print("  cd frontend")

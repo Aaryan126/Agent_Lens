@@ -440,6 +440,12 @@ render these episodes first, collapsing repeated inspection/passive telemetry an
 raw command fragments such as `2>/dev/null` with target-focused action descriptors while
 preserving raw records for audit details.
 
+Persistence follow-up status: local guard/dev-stack history is planned/implemented through
+`AGENTLENS_STORAGE_BACKEND=local_jsonl`, replaying the repo-local ignored
+`local_data/agentlens_audit.jsonl` file into runtime state on startup. Existing session
+picker and timeline APIs then reopen old sessions and recompute review episodes/flow maps
+from saved traces and gates.
+
 ## Phase 14A: One-Command Local Stack
 
 Reduce local workflow friction by replacing the four-terminal setup with one command that

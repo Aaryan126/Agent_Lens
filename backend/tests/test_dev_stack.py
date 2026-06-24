@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 from agentlens.dev_stack import DevStack
 
@@ -38,3 +39,21 @@ def test_stack_urls_use_configured_ports() -> None:
     assert stack.api_url == "http://127.0.0.1:8787"
     assert stack.frontend_url == "http://localhost:3000"
     assert stack.proxy_url == "ws://127.0.0.1:8791"
+
+
+def test_nonzero_codex_exit_keeps_stack_running(monkeypatch) -> None:
+    stack = _stack()
+    waited = {"called": False}
+
+    def fake_run(*args, **kwargs):
+        return SimpleNamespace(returncode=1)
+
+    def fake_wait_forever():
+        waited["called"] = True
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    monkeypatch.setattr(stack, "_wait_forever", fake_wait_forever)
+
+    stack._run_codex()
+
+    assert waited["called"] is True

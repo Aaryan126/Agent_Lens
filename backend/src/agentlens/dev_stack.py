@@ -114,7 +114,7 @@ class DevStack:
 
     def _start_guard(self) -> None:
         env = os.environ.copy()
-        env.setdefault("AGENTLENS_STORAGE_BACKEND", "memory")
+        env.setdefault("AGENTLENS_STORAGE_BACKEND", "local_jsonl")
         env["AGENTLENS_PROJECT_ROOT"] = str(self.repo)
         env.setdefault("AGENTLENS_AUDIT_LOG_PATH", "local_data/agentlens_audit.jsonl")
         env["AGENTLENS_CORS_ORIGINS"] = ",".join(
@@ -234,7 +234,14 @@ class DevStack:
         env = os.environ.copy()
         env["AGENTLENS_DISABLE_HOOKS"] = "1"
         print("Launching Codex TUI. Press Ctrl+C to stop Codex and AgentLens.")
-        subprocess.run(self.codex_command(), cwd=self.repo, env=env, check=False)
+        result = subprocess.run(self.codex_command(), cwd=self.repo, env=env, check=False)
+        if result.returncode != 0:
+            print()
+            print(f"Codex exited with code {result.returncode}. AgentLens services are still running.")
+            print("Reconnect Codex with:")
+            print(f"  {' '.join(['AGENTLENS_DISABLE_HOOKS=1', *self.codex_command()])}")
+            print("Press Ctrl+C here to stop the AgentLens stack.")
+            self._wait_forever()
 
     def _wait_forever(self) -> None:
         print("Stack is running. Press Ctrl+C to stop.")

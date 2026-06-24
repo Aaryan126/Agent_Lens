@@ -2,12 +2,11 @@
 
 AgentLens is a judgment layer for AI coding agents. It intercepts proposed tool calls, enriches them with codebase and session context, decides whether a human should review them, and records the full session in an audit-friendly ledger.
 
+Its objective is to make agent autonomy observable, reviewable, and governable without removing the speed benefits of AI-assisted development.
+
 The current build is local-first: Codex can run normally in the terminal while project-local hooks mirror proposed tool calls into a local AgentLens guard. The hosted demo path remains available for judging, Slack validation, and remote review.
 
 ## Current Architecture
-
-Tech stack: Python, FastAPI, Next.js, TypeScript, Pydantic, OpenAI, SQLite, Docker,
-TanStack Table, Recharts, React Flow, and Lucide React.
 
 - `backend/`: Python SDK and FastAPI service.
 - `frontend/`: Next.js session ledger and approval console.
@@ -15,6 +14,7 @@ TanStack Table, Recharts, React Flow, and Lucide React.
 - `plan.md`: phased build and validation checklist.
 - `implementation.md`: latest implementation status.
 - `AGENTS.md`: instructions for Codex and other coding agents working on this repo.
+- `docs/system_context.md`: comprehensive system context, architecture, workflows, and current gaps.
 - `docs/deployment.md`: hosted demo deployment checklist.
 
 ## Backend Capabilities
@@ -37,6 +37,8 @@ Slack/native Codex prompts interrupt when judgment is needed, and the dashboard 
 operators replay the session and inspect evidence.
 The UI is designed for fast operator review, with dense queues, evidence-first panels,
 and approval controls that keep risky agent actions easy to inspect before execution.
+The UI/UX prioritizes clarity under pressure, making risk, rationale, and next actions
+visible without forcing reviewers to leave their normal coding flow.
 - TanStack Table powers the gate queue with clear selected-row state and dense decision
   columns.
 - Recharts renders ledger analytics for approval patterns, risk distribution, and trust
@@ -118,7 +120,9 @@ uv run agentlens-guard --repo /path/to/your/repo
 ```
 
 This starts a local AgentLens API at `http://127.0.0.1:8787`, stores the ledger locally,
-and keeps Codex execution on your machine.
+and keeps Codex execution on your machine. Local session history is restored from
+`local_data/agentlens_audit.jsonl` on restart, so previous sessions remain available in
+the dashboard session picker.
 
 7. Start the full local stack with one command:
 
@@ -128,7 +132,8 @@ uv run agentlens-dev --repo /path/to/your/repo
 ```
 
 This starts the local guard API, Next.js ledger, and native Codex proxy, waits for each
-service to become ready, and then launches Codex connected to AgentLens.
+service to become ready, and then launches Codex connected to AgentLens. It uses the same
+repo-local JSONL history file as `agentlens-guard`.
 Press `Ctrl+C` to stop Codex and the AgentLens child processes.
 
 If the local virtualenv has not refreshed the new console script yet, use the module
@@ -438,7 +443,9 @@ proposals based on each change kind.
 
 ## Audit Log
 
-AgentLens writes append-only JSONL audit events to `AGENTLENS_AUDIT_LOG_PATH`.
+AgentLens writes append-only JSONL audit events to `AGENTLENS_AUDIT_LOG_PATH`. In local
+guard/dev-stack mode, this file is also replayed on startup to restore previous sessions,
+traces, gates, and recomputed review episodes.
 Current event types:
 
 - `session_started`
@@ -457,8 +464,9 @@ Use `GET /audit/events?limit=100` to inspect recent records during local demos.
 - `agentlens_gates`
 - `agentlens_audit_events`
 
-Runtime state can use the in-memory store for local fallback or PostgreSQL for durable
-hosted state with `AGENTLENS_STORAGE_BACKEND=postgres`.
+Runtime state can use the in-memory store for ephemeral tests, JSONL replay for local
+history, or PostgreSQL for durable hosted state. Local history uses
+`AGENTLENS_STORAGE_BACKEND=local_jsonl` and defaults to `local_data/agentlens_audit.jsonl`.
 
 ## Environment Variables
 
@@ -472,7 +480,7 @@ hosted state with `AGENTLENS_STORAGE_BACKEND=postgres`.
 - `SLACK_SIGNING_SECRET`: Slack request verification secret.
 - `SLACK_CHANNEL_ID`: default Slack channel for backend-owned demo cards.
 - `AGENTLENS_AUDIT_LOG_PATH`: local append-only JSONL audit log path.
-- `AGENTLENS_STORAGE_BACKEND`: `memory` for local fallback or `postgres` for hosted durable state.
+- `AGENTLENS_STORAGE_BACKEND`: `memory` for ephemeral tests, `local_jsonl` for repo-local history, or `postgres` for hosted durable state.
 - `AGENTLENS_CORS_ORIGINS`: comma-separated frontend origins allowed to call the backend.
 - `AGENTLENS_PROJECT_ROOT`: repo path used by hosted demo sessions and risk/dependency scanning.
 - `AGENTLENS_DISABLE_HOOKS`: `1` to make project-local Codex hooks exit immediately, useful when using `agentlens-codex-proxy`.

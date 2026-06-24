@@ -208,7 +208,7 @@ export default function Home() {
 
   async function refreshRecentSessions(targetApiUrl = apiUrl) {
     try {
-      const response = await fetch(`${targetApiUrl}/sessions?limit=12`);
+      const response = await fetch(`${targetApiUrl}/sessions?limit=50`);
       if (!response.ok) return;
       setRecentSessions((await response.json()) as SessionSummary[]);
     } catch {

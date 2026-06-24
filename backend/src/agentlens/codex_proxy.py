@@ -14,6 +14,7 @@ from urllib.parse import urlencode
 
 import httpx
 import websockets
+from websockets.exceptions import ConnectionClosed
 from websockets.asyncio.server import ServerConnection
 
 from agentlens.adapters.codex_app_server import (
@@ -416,17 +417,23 @@ class CodexAppServerProxy:
             dashboard_url=self.dashboard_url,
             enrich_native_prompt=self.enrich_native_prompt,
         )
-        async with websockets.connect(upstream_url) as upstream:
-            to_upstream = asyncio.create_task(self._client_to_upstream(client, upstream, state))
-            to_client = asyncio.create_task(self._upstream_to_client(upstream, client, state))
-            done, pending = await asyncio.wait(
-                {to_upstream, to_client},
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            for task in pending:
-                task.cancel()
-            for task in done:
-                task.result()
+        try:
+            async with websockets.connect(upstream_url) as upstream:
+                to_upstream = asyncio.create_task(self._client_to_upstream(client, upstream, state))
+                to_client = asyncio.create_task(self._upstream_to_client(upstream, client, state))
+                done, pending = await asyncio.wait(
+                    {to_upstream, to_client},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                for task in pending:
+                    task.cancel()
+                for task in done:
+                    try:
+                        task.result()
+                    except ConnectionClosed:
+                        return
+        except ConnectionClosed:
+            return
 
     async def _client_to_upstream(
         self,
@@ -437,12 +444,12 @@ class CodexAppServerProxy:
         async for raw in client:
             message = _decode_json(raw)
             if message is None:
-                await upstream.send(raw)
+                await _send_if_open(upstream, raw)
                 continue
             await state.observe_client_message(message)
             outbound = await state.handle_client_message(message)
             outbound = self._with_proxy_policy(outbound)
-            await upstream.send(json.dumps(outbound))
+            await _send_if_open(upstream, json.dumps(outbound))
 
     async def _upstream_to_client(
         self,
@@ -453,13 +460,13 @@ class CodexAppServerProxy:
         async for raw in upstream:
             message = _decode_json(raw)
             if message is None:
-                await client.send(raw)
+                await _send_if_open(client, raw)
                 continue
             target, outbound = await state.handle_upstream_message(message)
             if target == "upstream":
-                await upstream.send(json.dumps(outbound))
+                await _send_if_open(upstream, json.dumps(outbound))
             else:
-                await client.send(json.dumps(outbound))
+                await _send_if_open(client, json.dumps(outbound))
 
     def _stop_upstream(self) -> None:
         if self.upstream_process is None or self.upstream_process.poll() is not None:
@@ -569,6 +576,13 @@ def _decode_json(raw: Any) -> dict[str, Any] | None:
     except json.JSONDecodeError:
         return None
     return message if isinstance(message, dict) else None
+
+
+async def _send_if_open(connection: Any, raw: str) -> None:
+    try:
+        await connection.send(raw)
+    except ConnectionClosed:
+        return
 
 
 def _is_approval_request(message: dict[str, Any]) -> bool:

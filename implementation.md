@@ -253,6 +253,22 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
   `UV_CACHE_DIR=.uv-cache env -u AGENTLENS_DISABLE_HOOKS uv run pytest tests/test_session_api.py tests/test_policy_risk.py`
   reported 29 passed with 1 warning, frontend `npm run build` passed, and backend
   `./.venv/bin/ruff check .` passed.
+- Local session history is now persistent by default for local guard/dev-stack usage.
+  `AGENTLENS_STORAGE_BACKEND=local_jsonl` replays `local_data/agentlens_audit.jsonl` into
+  sessions, traces, and gates at startup, while continuing to append the existing audit
+  events for new activity. `agentlens-guard` and `agentlens-dev` default to this backend,
+  and the frontend session picker now requests the latest 50 sessions so older local Codex
+  sessions can be reopened with their Review Queue, Flow Map, Trajectory, and Audit Events
+  recomputed from saved raw records.
+- The local Codex proxy/dev-stack path was hardened after a live regression where Codex
+  reported `remote app server ... disconnected` and `agentlens-dev` stopped guard,
+  frontend, and proxy services after a README edit. The proxy bridge now treats WebSocket
+  connection closures as connection-level events instead of propagating them as unhandled
+  task failures, and `agentlens-dev` keeps services running after a non-zero Codex exit
+  while printing the reconnect command. Validation passed:
+  `UV_CACHE_DIR=.uv-cache env -u AGENTLENS_DISABLE_HOOKS uv run pytest tests/test_dev_stack.py tests/test_codex_proxy.py`
+  reported 22 passed, backend `./.venv/bin/ruff check .` passed, and backend
+  non-integration tests reported 95 passed with 2 deselected and 1 existing warning.
 - Frontend operator console polish pass: the sidebar is now sticky, full-height, and
   collapsible to an icon-only mode with its bottom status indicators always visible.
   Main-page spacing was tightened to a consistent `gap-5` rhythm, the gate queue table

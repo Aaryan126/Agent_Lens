@@ -117,6 +117,40 @@ class DatabaseBackedStore(InMemoryStore):
         return result
 
 
+class JsonlBackedStore(InMemoryStore):
+    """In-memory working set restored from and mirrored to a local JSONL audit log."""
+
+    def __init__(self, audit_log: JsonlAuditLog) -> None:
+        super().__init__(audit_log=audit_log)
+        self.reload()
+
+    def reload(self) -> None:
+        sessions: dict[str, Session] = {}
+        traces_by_id: dict[str, TraceEvent] = {}
+        gates: dict[str, Gate] = {}
+        for record in self.audit_log.read_all():
+            event_type = str(record.get("event_type") or "")
+            payload = record.get("payload")
+            if not isinstance(payload, dict):
+                continue
+            try:
+                if event_type == "session_started":
+                    session = Session.model_validate(payload)
+                    sessions[session.id] = session
+                elif event_type == "trace_captured":
+                    trace = TraceEvent.model_validate(payload)
+                    traces_by_id[trace.id] = trace
+                elif event_type in {"gate_created", "gate_updated"}:
+                    gate = Gate.model_validate(payload)
+                    gates[gate.id] = gate
+            except Exception:
+                continue
+        with self._lock:
+            self.sessions = sessions
+            self.traces = sorted(traces_by_id.values(), key=lambda trace: trace.created_at)
+            self.gates = gates
+
+
 def run_blocking(coroutine: Coroutine[Any, Any, Any]) -> Any:
     try:
         asyncio.get_running_loop()
@@ -147,6 +181,8 @@ def create_default_store() -> InMemoryStore:
         repository = SqlAlchemyLedgerRepository(session_factory)
         run_blocking(repository.create_schema(engine))
         return DatabaseBackedStore(repository)
+    if settings.agentlens_storage_backend == "local_jsonl":
+        return JsonlBackedStore(JsonlAuditLog(settings.agentlens_audit_log_path))
     return InMemoryStore(audit_log=JsonlAuditLog(settings.agentlens_audit_log_path))
 
 

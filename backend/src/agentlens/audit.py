@@ -46,11 +46,17 @@ class JsonlAuditLog(AuditLog):
         if not self.path.exists():
             return []
         with self._lock:
-            return [
-                json.loads(line)
-                for line in self.path.read_text(encoding="utf-8").splitlines()
-                if line.strip()
-            ]
+            records: list[dict[str, Any]] = []
+            for line in self.path.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(record, dict):
+                    records.append(record)
+            return records
 
     def _serialize_payload(self, payload: BaseModel | dict[str, Any]) -> dict[str, Any]:
         if isinstance(payload, BaseModel):

@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     slack_signing_secret: str = ""
     slack_channel_id: str = ""
     agentlens_audit_log_path: str = "local_data/agentlens_audit.jsonl"
-    agentlens_storage_backend: Literal["memory", "postgres"] = "memory"
+    agentlens_storage_backend: Literal["memory", "local_jsonl", "postgres"] = "memory"
     agentlens_cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     @property

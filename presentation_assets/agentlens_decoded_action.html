@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AgentLens Decoded Action</title>
+    <style>
+      :root {
+        --teal: #14998b;
+        --teal-dark: #08786f;
+        --ink: #15171c;
+        --muted: #727680;
+        --soft: #f6fbfa;
+        --line: #dbeeea;
+        --red: #f35f64;
+        --red-dark: #c83f44;
+        --red-soft: #fff0ef;
+        --amber: #f6b94d;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: transparent;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        color: var(--ink);
+      }
+
+      .frame {
+        width: 920px;
+        padding: 40px;
+      }
+
+      .label {
+        margin: 0 0 18px;
+        color: var(--teal);
+        font-size: 30px;
+        font-weight: 800;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      .card {
+        width: 100%;
+        overflow: hidden;
+        border: 2px solid var(--line);
+        border-radius: 18px;
+        background: #ffffff;
+        box-shadow: 0 18px 45px rgba(10, 42, 42, 0.12);
+      }
+
+      .window {
+        height: 76px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 0 32px;
+        border-bottom: 2px solid var(--line);
+        background: #f1fbf8;
+      }
+
+      .lights {
+        display: flex;
+        gap: 12px;
+        flex: 0 0 auto;
+      }
+
+      .light {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+      }
+
+      .red {
+        background: #ff665c;
+      }
+
+      .yellow {
+        background: #ffbd3f;
+      }
+
+      .green {
+        background: #24c267;
+      }
+
+      .terminal-title {
+        flex: 1;
+        color: var(--teal);
+        font-size: 22px;
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        font-weight: 800;
+        text-align: center;
+      }
+
+      .status-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--red);
+        box-shadow: 0 0 0 7px rgba(243, 95, 100, 0.15);
+      }
+
+      .content {
+        padding: 34px 34px 30px;
+      }
+
+      .top-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 28px;
+        margin-bottom: 28px;
+      }
+
+      h1 {
+        max-width: 520px;
+        margin: 0;
+        font-size: 31px;
+        line-height: 1.14;
+        letter-spacing: 0;
+      }
+
+      .risk {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 220px;
+        min-height: 60px;
+        padding: 12px 24px;
+        border-radius: 999px;
+        background: var(--red-soft);
+        color: var(--red-dark);
+        font-size: 24px;
+        font-weight: 900;
+      }
+
+      .summary {
+        margin: 0 0 26px;
+        color: #5f6470;
+        font-size: 25px;
+        line-height: 1.42;
+      }
+
+      .summary strong {
+        color: var(--ink);
+      }
+
+      .evidence {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+        margin-bottom: 24px;
+      }
+
+      .box {
+        min-height: 150px;
+        padding: 22px;
+        border: 2px dashed #d7dce2;
+        border-radius: 14px;
+        background: #fbfcfd;
+      }
+
+      .box-title {
+        margin: 0 0 11px;
+        color: #6b707a;
+        font-size: 16px;
+        font-weight: 900;
+        text-transform: uppercase;
+      }
+
+      .code {
+        margin: 0;
+        color: #555b66;
+        font-size: 19px;
+        line-height: 1.28;
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        overflow-wrap: anywhere;
+      }
+
+      .bullets {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        color: #555b66;
+        font-size: 20px;
+        line-height: 1.35;
+      }
+
+      .bullets li {
+        position: relative;
+        padding-left: 24px;
+        margin: 0 0 8px;
+      }
+
+      .bullets li::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 10px;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--amber);
+      }
+
+      .decision {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 22px 26px;
+        border-radius: 16px;
+        background: var(--red-soft);
+      }
+
+      .decision-copy {
+        color: var(--red-dark);
+        font-size: 22px;
+        font-weight: 800;
+        line-height: 1.25;
+      }
+
+      .decision-action {
+        flex: 0 0 auto;
+        min-width: 180px;
+        padding: 16px 22px;
+        border-radius: 12px;
+        background: var(--red);
+        color: #ffffff;
+        font-size: 22px;
+        font-weight: 900;
+        text-align: center;
+        box-shadow: 0 10px 24px rgba(243, 95, 100, 0.22);
+      }
+
+      .footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        margin-top: 22px;
+        color: var(--muted);
+        font-size: 16px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .confidence {
+        color: var(--teal-dark);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="frame" aria-label="AgentLens decoded action card">
+      <p class="label">AgentLens Decoded Action</p>
+      <section class="card">
+        <div class="window">
+          <div class="lights" aria-hidden="true">
+            <span class="light red"></span>
+            <span class="light yellow"></span>
+            <span class="light green"></span>
+          </div>
+          <div class="terminal-title">agentlens-lens.exe</div>
+          <div class="status-dot" aria-hidden="true"></div>
+        </div>
+
+        <div class="content">
+          <div class="top-row">
+            <h1>Database destructive command</h1>
+            <div class="risk">CRITICAL RISK</div>
+          </div>
+
+          <p class="summary">
+            The agent is about to <strong>delete the sessions table</strong>
+            while working on a login bug. This could immediately sign out users
+            and break authentication.
+          </p>
+
+          <div class="evidence">
+            <div class="box">
+              <p class="box-title">Detected raw action</p>
+              <p class="code">
+                psql $DATABASE_URL -c<br />
+                "DROP TABLE sessions CASCADE;"
+              </p>
+            </div>
+
+            <div class="box">
+              <p class="box-title">Why AgentLens stopped it</p>
+              <ul class="bullets">
+                <li>Irreversible database change</li>
+                <li>Outside stated goal</li>
+                <li>No backup or rollback found</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="decision">
+            <div class="decision-copy">
+              Recommended decision: deny unless this is an intentional local
+              test reset.
+            </div>
+            <div class="decision-action">DENY</div>
+          </div>
+
+          <div class="footer">
+            <span>Goal drift: high</span>
+            <span class="confidence">Confidence: 86%</span>
+            <span>Policy: protect data</span>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

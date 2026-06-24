@@ -2,8 +2,9 @@ import json
 
 import httpx
 import pytest
+from websockets.exceptions import ConnectionClosedOK
 
-from agentlens.codex_proxy import AgentLensProxyState, CodexAppServerProxy, PendingNativeApproval
+from agentlens.codex_proxy import AgentLensProxyState, CodexAppServerProxy, PendingNativeApproval, _send_if_open
 
 
 def _make_proxy() -> CodexAppServerProxy:
@@ -281,6 +282,15 @@ def test_proxy_remote_command_includes_explicit_policy_and_sandbox() -> None:
         == "AGENTLENS_DISABLE_HOOKS=1 codex --ask-for-approval untrusted "
         "--sandbox workspace-write --remote ws://127.0.0.1:8791"
     )
+
+
+@pytest.mark.asyncio
+async def test_proxy_send_if_open_ignores_closed_connection() -> None:
+    class ClosedConnection:
+        async def send(self, raw):
+            raise ConnectionClosedOK(None, None)
+
+    await _send_if_open(ClosedConnection(), "{}")
 
 
 @pytest.mark.asyncio
