@@ -1,4 +1,4 @@
-# AgentLens Implementation Log
+# Agent Lens Implementation Log
 
 ## Current Status
 
@@ -53,26 +53,26 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 - The frontend revamp is deployed at `https://frontend-ashy-mu-csvn2wfbmk.vercel.app` and was smoke-tested against the hosted Render backend: backend status rendered online, `Run Demo Session` created a real session, queue/inspector/analytics populated, and no horizontal overflow was detected at 1440px desktop or 390px mobile widths.
 - The hosted console main workspace was tightened again for production presentation: controlled max width, compact metric cards, aligned review grid, smaller inspector empty state, and working sidebar sections for Trajectory, Policy Ledger, Slack Surface, and Audit Events.
 - The primary UI flow now presents itself as a real supervision workflow rather than a toy demo: the public console uses `Live Review`, `Start Supervision`, and Codex-action waiting states.
-- Start Supervision now creates an empty real AgentLens session through `POST /sessions` and polls the timeline instead of replaying the fixture. The empty queue shows a session-specific adapter command for posting real local Codex CLI events into the hosted review queue.
+- Start Supervision now creates an empty real Agent Lens session through `POST /sessions` and polls the timeline instead of replaying the fixture. The empty queue shows a session-specific adapter command for posting real local Codex CLI events into the hosted review queue.
 - The CLI supports remote posting with `--api-url` and `--session-id`, so `uv run agentlens-demo --codex-prompt ...` can run Codex locally and submit parsed tool-call proposals to the hosted backend.
 - Local-first guard mode is implemented with `uv run agentlens-guard --repo ...`. It starts a local API on `127.0.0.1:8787`, keeps storage local by default, and lets the frontend call `/codex/sessions` so Codex runs on the developer's machine instead of in the hosted backend.
 - `POST /codex/sessions` runs the Codex CLI adapter locally, parses real Codex JSON events, gates the resulting proposals, and returns the same timeline/ledger shape as the hosted session API.
-- Terminal-first Codex mirroring is implemented with `uv run agentlens-codex --repo ... "task"`. It creates or uses an AgentLens session, runs Codex locally, prints readable terminal output, and mirrors parsed tool-call proposals into the AgentLens API.
+- Terminal-first Codex mirroring is implemented with `uv run agentlens-codex --repo ... "task"`. It creates or uses an Agent Lens session, runs Codex locally, prints readable terminal output, and mirrors parsed tool-call proposals into the Agent Lens API.
 - The frontend review queue and timeline now collapse low-risk auto-executed inspection calls into a single inspection batch so read-only exploration does not flood the dashboard.
 - Latest hosted smoke passed: every sidebar section switched content, `Start Supervision` created a real hosted session, remote CLI posting populated the review queue, and no horizontal overflow was detected on desktop or mobile.
 - Terminal-first mirroring now prints a session-specific dashboard URL, and the frontend loads `?session=...` links directly. This fixes the gap where `agentlens-codex` successfully posted events to the local guard but the browser stayed on an old or empty session.
-- Codex CLI surface review found experimental `app-server`, `remote-control`, and `exec-server` commands, but no stable first-pass command for subscribing to an arbitrary already-open Codex TUI session. The reliable path remains launching Codex through AgentLens JSON event mode; deeper always-on attachment should target the official Codex server protocol.
+- Codex CLI surface review found experimental `app-server`, `remote-control`, and `exec-server` commands, but no stable first-pass command for subscribing to an arbitrary already-open Codex TUI session. The reliable path remains launching Codex through Agent Lens JSON event mode; deeper always-on attachment should target the official Codex server protocol.
 - Terminal session links now include both `session` and `api` query parameters, and the frontend can switch API targets at runtime. This fixes local dashboards that were started without `NEXT_PUBLIC_AGENTLENS_API_URL=http://127.0.0.1:8787`.
-- A first native Codex TUI integration is implemented through project-local hooks in `.codex/hooks.json` and the `agentlens-hook` console script. Normal interactive Codex sessions can mirror `PreToolUse` and `PermissionRequest` events into the local AgentLens guard after the user reviews/trusts the hooks with `/hooks`.
+- A first native Codex TUI integration is implemented through project-local hooks in `.codex/hooks.json` and the `agentlens-hook` console script. Normal interactive Codex sessions can mirror `PreToolUse` and `PermissionRequest` events into the local Agent Lens guard after the user reviews/trusts the hooks with `/hooks`.
 - The local API now exposes `GET /sessions/latest`, and the local frontend polls it so hook-created sessions can appear without a session-specific URL.
 - `agentlens-hook` now recovers when `.agentlens/codex_hook_session.json` points at a session from a previous in-memory guard process. A `404 session not found` response triggers fresh session creation and a retry.
 - The dashboard no longer shows the web-launched Codex task composer. The primary local workflow is now the normal Codex terminal plus project hooks, with the UI acting as a passive review and ledger console.
 - Cost-aware OpenAI model routing is implemented through `agentlens.model_routing`. Low-risk auto-executed work and lightweight summaries use `OPENAI_NANO_MODEL`; consequential gated actions use `OPENAI_MODEL`; drift continues to use `OPENAI_EMBEDDING_MODEL`.
-- Decision cards now carry full trajectory details, confidence calibration factors, dependency/reference evidence, drift score, and model-role metadata. The frontend inspector renders those details so the dashboard shows why AgentLens made a recommendation instead of only showing a risk badge.
+- Decision cards now carry full trajectory details, confidence calibration factors, dependency/reference evidence, drift score, and model-role metadata. The frontend inspector renders those details so the dashboard shows why Agent Lens made a recommendation instead of only showing a risk badge.
 - The intelligence layer now receives a typed `DecisionContext` containing the original instruction, recent trace/gate context, git snapshot, risk, policy, inferred goal, and dependency evidence before generating trajectory, drift, confidence, and translation.
 - Semantic risk analysis now scans Python plus JavaScript/TypeScript import references, config/docs references, affected shell paths, and shell mutation evidence.
 - `POST /gates/{gate_id}/explain` now returns structured `ExplainMoreResponse` data with trajectory, confidence evidence, dependency evidence, and safer modification guidance. Slack `Explain more` renders the richer explanation too.
-- Codex hook mode now handles `UserPromptSubmit` to create a fresh AgentLens session per new Codex task and suppresses duplicate hook notifications for the same tool payload across `PreToolUse` and `PermissionRequest`.
+- Codex hook mode now handles `UserPromptSubmit` to create a fresh Agent Lens session per new Codex task and suppresses duplicate hook notifications for the same tool payload across `PreToolUse` and `PermissionRequest`.
 - Validation passed on June 22, 2026: focused backend suite `uv run pytest tests/test_policy_risk.py tests/test_session_api.py tests/test_codex_hook.py tests/test_model_routing.py tests/test_openai_integration.py` reported 26 passed, `uv run ruff check .` passed, and frontend `npm run build` passed.
 - Live Codex TUI validation exposed `PreToolUse hook timed out after 10s` when many hooks fired through `uv run agentlens-hook`. `.codex/hooks.json` now prefers the already-installed `backend/.venv/bin/agentlens-hook` console script, keeps a `uv run` fallback, and raises hook timeouts to 30 seconds. Hook JSON validation passed and `uv run pytest tests/test_codex_hook.py` reported 5 passed.
 - Read-only shell and file inspections now short-circuit to low risk before dependency/config blast-radius checks. This prevents repo overview tasks from creating pending gates just because they read important files such as `api.py`, `session.py`, or `package.json`.
@@ -81,9 +81,9 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 - Validation passed after enforcement changes: `uv run pytest` reported 57 passed, `uv run ruff check .` passed, and frontend `npm run build` passed.
 - Live validation confirmed read-only Codex repo inspection now collapses into an auto-executed inspection batch. A normal TUI README edit still executed before a dashboard approval decision, so TUI hook enforcement is now documented as best-effort and tool/event dependent. The inspector now hides decision controls for resolved gates and auto-selects pending gates when they appear.
 - A guarded app-server terminal path is now implemented through `agentlens-run`. It launches
-  Codex app-server over JSON-RPC, starts a Codex thread/turn, creates an AgentLens session,
+  Codex app-server over JSON-RPC, starts a Codex thread/turn, creates an Agent Lens session,
   streams readable events to the terminal, maps app-server command/file-change/permission
-  approval requests into AgentLens proposals, waits for pending gate decisions, and returns
+  approval requests into Agent Lens proposals, waits for pending gate decisions, and returns
   accept/cancel responses back to Codex. This is the intended strict local control path;
   project hooks remain useful for observing normal TUI sessions but are not the hard-control
   surface for every edit path.
@@ -109,7 +109,7 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 - Multi-terminal session management is implemented for the local console. `GET /sessions`
   returns recent sessions, and the frontend header includes a session picker plus an explicit
   Follow Latest control. This lets users keep multiple Codex terminals open while deliberately
-  choosing which AgentLens session receives approvals. Validation passed:
+  choosing which Agent Lens session receives approvals. Validation passed:
   `uv run pytest tests/test_session_api.py` reported 12 passed and frontend `npm run build`
   passed.
 - App-server approval prompts now print gate-specific dashboard URLs containing `session`,
@@ -123,9 +123,9 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
   URL back to `/sessions/latest`; users must click Follow Latest to opt back into that mode.
 - A first native Codex TUI proxy is implemented through `agentlens-codex-proxy`. It starts a
   local `codex app-server`, exposes `ws://127.0.0.1:8791` for `codex --remote`, intercepts
-  app-server approval requests, creates AgentLens gates, auto-accepts low-risk resolved
-  gates, forwards pending gates to the native Codex approval prompt with an AgentLens summary
-  and dashboard link, and records native approve/cancel responses back into the AgentLens
+  app-server approval requests, creates Agent Lens gates, auto-accepts low-risk resolved
+  gates, forwards pending gates to the native Codex approval prompt with an Agent Lens summary
+  and dashboard link, and records native approve/cancel responses back into the Agent Lens
   ledger.
 - Focused proxy validation passed: `./.venv/bin/pytest tests/test_codex_proxy.py
   tests/test_codex_app_server.py` reported 9 passed, and `./.venv/bin/ruff check .` passed.
@@ -137,10 +137,10 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
   compete with app-server approval control.
 - The proxy prompt copy now matches that workflow directly: startup instructions print the
   `AGENTLENS_DISABLE_HOOKS=1 codex --ask-for-approval untrusted --sandbox workspace-write --remote ...` command, and native Codex approval
-  reasons render concise AgentLens review copy from the proposal target, risk level, and
+  reasons render concise Agent Lens review copy from the proposal target, risk level, and
   first evidence item while keeping the dashboard URL only in `agentLens.dashboardUrl`
   metadata.
-- The proxy now preflights `GET /health` on the AgentLens API before accepting Codex TUI
+- The proxy now preflights `GET /health` on the Agent Lens API before accepting Codex TUI
   connections. If `agentlens-guard` is not running, it fails fast with the exact local guard
   command instead of crashing during `turn/start`.
 - The Codex TUI proxy now rewrites forwarded `thread/start` and `turn/start` messages to
@@ -170,8 +170,8 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
   guard ran on `127.0.0.1:8787`, the frontend connected to the local guard, and
   `agentlens-codex-proxy` ran on `ws://127.0.0.1:8791`. Codex was launched with
   `AGENTLENS_DISABLE_HOOKS=1 codex --ask-for-approval untrusted --sandbox workspace-write --remote ws://127.0.0.1:8791`.
-  A read-only prompt produced auto-executed AgentLens ledger entries. A README edit prompt
-  triggered the native Codex permission prompt with AgentLens reason copy, and approving in
+  A read-only prompt produced auto-executed Agent Lens ledger entries. A README edit prompt
+  triggered the native Codex permission prompt with Agent Lens reason copy, and approving in
   Codex allowed the README edit.
 - Final automated validation passed after clearing the live proxy
   `AGENTLENS_DISABLE_HOOKS=1` environment for hook unit tests:
@@ -207,7 +207,7 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
   ./.venv/bin/pytest tests/test_dev_stack.py tests/test_codex_proxy.py` reporting 12
   passed, and backend `./.venv/bin/ruff check .` passed.
 - The native proxy now mirrors best-effort non-approval app-server command/read telemetry
-  into AgentLens when Codex emits structured events, so read-only exploration can enrich
+  into Agent Lens when Codex emits structured events, so read-only exploration can enrich
   the ledger even when no approval prompt is required. Duplicate passive events are
   suppressed by method/tool/target or item id, and failures are ignored so Codex TUI
   streaming is not disrupted.
@@ -222,8 +222,8 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
   network access allowed, `env -u AGENTLENS_DISABLE_HOOKS ./.venv/bin/pytest
   tests/test_openai_integration.py` reported 2 passed.
 - Native proxy sessions now group follow-up prompts from the same Codex remote TUI thread
-  into one AgentLens session instead of creating a new dashboard session per prompt. The
-  proxy resets the AgentLens session only when Codex starts a new thread. It also resolves
+  into one Agent Lens session instead of creating a new dashboard session per prompt. The
+  proxy resets the Agent Lens session only when Codex starts a new thread. It also resolves
   older outstanding native approval gates with the same native accept/cancel decision so
   stale command gates do not remain pending after Codex continues, and command approval
   payload parsing now recursively extracts nested command/cwd fields. The dashboard no
@@ -373,7 +373,7 @@ The repo is being initialized from `prd.md` into a local-first implementation. T
 - Permission-profile approval requests in app-server mode are mapped conservatively and still
   need live validation with network/MCP/escalated-permission payloads.
 - Native Codex TUI proxy enrichment is validated for concise reason-copy display in the
-  standard native permission prompt. A full first-class AgentLens card inside Codex may
+  standard native permission prompt. A full first-class Agent Lens card inside Codex may
   still require an upstream Codex extension point or a maintained fork.
 - Native proxy approve and block/cancel behavior has been live-validated for README edit
   prompts, but broader permission classes still need hardening.

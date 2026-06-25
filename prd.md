@@ -1,8 +1,8 @@
-# AgentLens — Product Requirements Document
+# Agent Lens — Product Requirements Document
 
 **Version:** 0.1 — Competition Draft  
 **Focus agent:** OpenAI Codex  
-**Core thesis:** The value of AgentLens is not the gate. It's the intelligence inside the gate.
+**Core thesis:** The value of Agent Lens is not the gate. It's the intelligence inside the gate.
 
 ---
 
@@ -23,9 +23,9 @@ There is currently no layer between **"agent decides"** and **"action executes"*
 
 ---
 
-## 2. What AgentLens Is
+## 2. What Agent Lens Is
 
-AgentLens is a **judgment layer** — a Python SDK that wraps Codex and intercepts every tool call before execution, enriches it with contextual intelligence, and delivers a decision to the human in the surface they are already in, at the moment it matters, and then disappears.
+Agent Lens is a **judgment layer** — a Python SDK that wraps Codex and intercepts every tool call before execution, enriches it with contextual intelligence, and delivers a decision to the human in the surface they are already in, at the moment it matters, and then disappears.
 
 It is not a dashboard you monitor. It is a system that **reaches you when your judgment is needed** and gives you everything required to exercise that judgment well.
 
@@ -38,7 +38,7 @@ The product has two surfaces:
 
 ## 3. The Intelligence Layer — Core of the Product
 
-This is what separates AgentLens from a confirm dialog. Each component below represents a distinct technical problem.
+This is what separates Agent Lens from a confirm dialog. Each component below represents a distinct technical problem.
 
 ### 3.1 Trace Engine
 
@@ -76,7 +76,7 @@ The output is a 2×2 risk matrix:
 
 This is the deepest feature and the most novel.
 
-Instead of asking "should I approve this action?", AgentLens asks "if I approve this action, what is Codex likely to do next, and when is the earliest point of no return?"
+Instead of asking "should I approve this action?", Agent Lens asks "if I approve this action, what is Codex likely to do next, and when is the earliest point of no return?"
 
 At each gate, a secondary LLM call takes:
 - The current trace
@@ -99,20 +99,20 @@ Example output rendered in the approval notification:
 
 Codex is given an instruction. As the session progresses, the agent's behavior can silently diverge from that instruction — solving a related but different problem, over-engineering, or pursuing an inferred sub-goal the user never asked for.
 
-AgentLens continuously compares:
+Agent Lens continuously compares:
 - The original user instruction (embedded at session start)
 - The semantic summary of what Codex has actually done so far
 - The stated intent of the current proposed action
 
-When cosine similarity between the original instruction embedding and the inferred current goal drops below a configurable threshold, AgentLens surfaces a drift alert — not as a hard block, but as a soft flag in the next approval card:
+When cosine similarity between the original instruction embedding and the inferred current goal drops below a configurable threshold, Agent Lens surfaces a drift alert — not as a hard block, but as a soft flag in the next approval card:
 
 > Heads up: Codex appears to be rebuilding the entire auth system. Your original instruction was to fix the password reset bug. Still want to continue?
 
-This is proactive oversight. The human does not need to track what the agent is doing — AgentLens does it for them.
+This is proactive oversight. The human does not need to track what the agent is doing — Agent Lens does it for them.
 
 ### 3.5 Calibrated Confidence Layer
 
-Risk level alone ("High / Medium / Low") is not enough information for a human to make a good decision. AgentLens surfaces the agent's actual confidence in each action, derived from:
+Risk level alone ("High / Medium / Low") is not enough information for a human to make a good decision. Agent Lens surfaces the agent's actual confidence in each action, derived from:
 
 - Entropy of the token distribution at the decision point (low entropy = high confidence)
 - Whether the action matches patterns seen earlier in the session
@@ -137,7 +137,7 @@ The translation call uses a secondary Claude/GPT call with a strict prompt that 
 
 ### 4.1 Primary Surface: Ambient Decision Card
 
-When a gate triggers, AgentLens pushes a structured notification. The primary channel is Slack; secondary is mobile push via a companion app.
+When a gate triggers, Agent Lens pushes a structured notification. The primary channel is Slack; secondary is mobile push via a companion app.
 
 The card contains:
 - One-line plain-English summary (from translation layer)
@@ -156,7 +156,7 @@ If the human taps Explain more, a follow-up card expands with:
 - Full reasoning chain from Codex (the raw scratchpad, rendered legibly)
 - Dependency graph snippet showing what files are affected
 - The counterfactual trajectory in full
-- A free-text input to ask AgentLens a question ("why does it think this file is redundant?")
+- A free-text input to ask Agent Lens a question ("why does it think this file is redundant?")
 
 This is a second LLM call that answers the user's question in context, using the full trace as grounding.
 
@@ -209,7 +209,7 @@ Policies are evaluated in order. The first match wins. All policy evaluations ar
 Developer gives Codex a task
         │
         ▼
-AgentLens SDK wraps the Codex session
+Agent Lens SDK wraps the Codex session
         │
         ▼
 Codex proposes a tool call
@@ -295,10 +295,10 @@ The moat is not the interception layer — that is a commodity. The moat is:
 - **The counterfactual trajectory engine** — no existing oversight tool does this
 - **The drift detector** — catches misalignment before it compounds
 - **The audit corpus** — every session logged makes the classifier smarter over time (network effect on risk scoring)
-- **EU AI Act Article 14** — mandates human oversight for high-risk AI systems; AgentLens is the compliance primitive
+- **EU AI Act Article 14** — mandates human oversight for high-risk AI systems; Agent Lens is the compliance primitive
 
 ---
 
 ## 10. The One-Liner
 
-AgentLens is not a dashboard you monitor. It is the intelligence layer that reaches you when your judgment is needed — and makes that judgment worth having.
+Agent Lens is not a dashboard you monitor. It is the intelligence layer that reaches you when your judgment is needed — and makes that judgment worth having.

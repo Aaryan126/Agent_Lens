@@ -1,11 +1,11 @@
-# AgentLens Competition Demo
+# Agent Lens Competition Demo
 
-This demo is designed to show AgentLens against the judging rubric: challenge-solution fit,
+This demo is designed to show Agent Lens against the judging rubric: challenge-solution fit,
 AI leverage, product thinking/UI, originality, and evidence of real demand.
 
 ## Demo Story
 
-AgentLens sits between Codex and execution. It captures proposed tool calls, scores risk with
+Agent Lens sits between Codex and execution. It captures proposed tool calls, scores risk with
 repo context, predicts likely next steps, detects drift, translates the action into developer
 language, and pushes the decision into a local review UI or Slack-style card.
 
@@ -66,7 +66,7 @@ uv run agentlens-demo --codex-prompt "Do not modify files. Inspect the repositor
 
 ### Challenge-Solution Fit
 
-AgentLens directly addresses unsafe autonomous coding-agent execution. The demo shows the
+Agent Lens directly addresses unsafe autonomous coding-agent execution. The demo shows the
 difference between a safe read, a reviewable write, and a critical destructive migration action.
 
 ### AI Leverage and Technical Execution
@@ -82,7 +82,7 @@ and trust patterns.
 
 ### Originality and Insight
 
-AgentLens does not ask "approve this command?" in isolation. It asks whether the agent should
+Agent Lens does not ask "approve this command?" in isolation. It asks whether the agent should
 continue in a direction by showing likely next steps and the point where the action becomes harder
 to undo.
 

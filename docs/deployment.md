@@ -1,4 +1,4 @@
-# AgentLens Hosted Demo Deployment
+# Agent Lens Hosted Demo Deployment
 
 The judging demo should use stable public URLs instead of local ngrok. The recommended
 split is:
@@ -45,7 +45,7 @@ Postgres expiry: 2026-07-21
 
 Notes:
 
-- Render may provide `DATABASE_URL` as `postgres://...` or `postgresql://...`; AgentLens
+- Render may provide `DATABASE_URL` as `postgres://...` or `postgresql://...`; Agent Lens
   normalizes that to the async SQLAlchemy driver automatically.
 - `AGENTLENS_STORAGE_BACKEND=postgres` is required for durable hosted state. Without it,
   the app uses in-memory state and Slack buttons can break after a restart.

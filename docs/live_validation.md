@@ -1,4 +1,4 @@
-# AgentLens Live Validation Guide
+# Agent Lens Live Validation Guide
 
 Use this guide after the local demo passes. These steps validate the remaining external-service
 pieces: live Slack buttons and PostgreSQL-backed storage readiness.
@@ -21,7 +21,7 @@ Expected:
 
 ## 2. Slack Live Button Validation
 
-### A. Start AgentLens
+### A. Start Agent Lens
 
 Terminal 1:
 
@@ -76,7 +76,7 @@ https://YOUR_PUBLIC_URL/integrations/slack/actions
 In Slack API dashboard:
 
 1. Go to `https://api.slack.com/apps`.
-2. Create an app or open the existing AgentLens app.
+2. Create an app or open the existing Agent Lens app.
 3. Go to **Interactivity & Shortcuts**.
 4. Turn **Interactivity** on.
 5. Set **Request URL** to:
@@ -128,7 +128,7 @@ Expected:
 
 ### F. Live Slack Button Test
 
-To send a real AgentLens card into Slack, the app needs a bot token and a channel.
+To send a real Agent Lens card into Slack, the app needs a bot token and a channel.
 
 1. In Slack app settings, go to **OAuth & Permissions**.
 2. Add bot token scopes:
@@ -170,7 +170,7 @@ Expected:
 
 - The response includes a `session_id`.
 - The response includes two posted Slack messages.
-- Slack receives pending AgentLens cards.
+- Slack receives pending Agent Lens cards.
 - Clicking Approve / Block / Modify sends a request through ngrok.
 - Backend logs show `POST /integrations/slack/actions`.
 - The Slack message is replaced with the updated gate status.

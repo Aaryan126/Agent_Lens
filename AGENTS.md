@@ -1,8 +1,8 @@
-# AgentLens Agent Instructions
+# Agent Lens Agent Instructions
 
 ## Project Objective
 
-AgentLens is a judgment layer for AI coding agents. It intercepts proposed tool calls, captures trace context, evaluates semantic risk, asks for human approval when needed, and records an auditable session ledger.
+Agent Lens is a judgment layer for AI coding agents. It intercepts proposed tool calls, captures trace context, evaluates semantic risk, asks for human approval when needed, and records an auditable session ledger.
 
 The core product value is the intelligence layer: semantic risk, counterfactual trajectory, goal drift, calibrated confidence, and concise translation.
 

@@ -1,4 +1,4 @@
-# AgentLens Plan
+# Agent Lens Plan
 
 ## Phase 0: Foundation
 
@@ -120,7 +120,7 @@ Automatic validation:
 Human validation:
 - Run the final judging demo against the rubric in `prd.md` and the supplied judging criteria.
 
-Status: mostly complete for local competition demo. AgentLens now has an append-only JSONL audit log,
+Status: mostly complete for local competition demo. Agent Lens now has an append-only JSONL audit log,
 `GET /audit/events`, PostgreSQL-ready SQLAlchemy ledger models, and a Codex CLI adapter.
 Real Codex JSONL validation confirmed `command_execution` and `file_change` parsing.
 Read-only Codex inspection commands auto-execute as low risk, while file changes become
@@ -129,7 +129,7 @@ implemented. Remaining work: wire PostgreSQL-backed runtime state.
 
 ## Phase 8: Hosted Judging Demo
 
-Make AgentLens deployable behind stable public URLs so judges can use a live link without
+Make Agent Lens deployable behind stable public URLs so judges can use a live link without
 local backend, frontend, ngrok, or Slack tunnel setup.
 
 Automatic validation:
@@ -152,7 +152,7 @@ backend after the operator-console redesign.
 
 ## Phase 9: Local-First Guard
 
-Make AgentLens useful as a local developer tool rather than a cloud-first demo. The guard
+Make Agent Lens useful as a local developer tool rather than a cloud-first demo. The guard
 runs on the developer machine, starts a local API, stores the ledger locally by default,
 and executes Codex locally so repository context does not need to leave the workstation.
 
@@ -172,7 +172,7 @@ tool-call proposals; the frontend detects local API mode and calls the local Cod
 endpoint instead of the hosted bridge flow.
 
 Follow-up status: terminal-first mirroring is implemented with `agentlens-codex`, letting
-developers run Codex from their normal terminal while AgentLens mirrors parsed tool calls
+developers run Codex from their normal terminal while Agent Lens mirrors parsed tool calls
 into the dashboard. Low-risk inspection calls are collapsed in the review queue and
 timeline to keep the dashboard focused on meaningful supervision events. The terminal
 command now prints a session-specific dashboard URL, and the frontend restores sessions
@@ -188,7 +188,7 @@ link. This still needs live interactive validation and payload-shape hardening b
 should be presented as the primary production path.
 
 Third follow-up status: Codex hook mode is now stronger for real usage. `UserPromptSubmit`
-starts a fresh AgentLens session per task, duplicate `PreToolUse` / `PermissionRequest`
+starts a fresh Agent Lens session per task, duplicate `PreToolUse` / `PermissionRequest`
 payloads are suppressed, stale local session files recover automatically, and the web
 task composer has been removed so the normal Codex terminal remains the primary workflow.
 Live validation then exposed hook process startup latency: repeated `PreToolUse` calls
@@ -197,7 +197,7 @@ commands now prefer `backend/.venv/bin/agentlens-hook`, keep a `uv run` fallback
 a 30-second timeout.
 Fourth follow-up status: hook mode is no longer mirror-only for pending risky actions.
 Read-only shell/file inspections short-circuit to low risk and auto-execute before
-dependency blast-radius checks. Pending hooked actions wait briefly for AgentLens
+dependency blast-radius checks. Pending hooked actions wait briefly for Agent Lens
 approval; approved/modified gates pass, blocked or timed-out gates fail the hook with a
 non-zero exit. The UI now labels these controls as gate decisions instead of generic
 Codex controls.
@@ -232,7 +232,7 @@ Automatic validation:
 Human validation:
 - Start `uv run agentlens-guard --repo /Users/aaryan/Desktop/Agent_Lens`.
 - Start the frontend on `localhost:3000`.
-- Run a normal Codex TUI task and confirm AgentLens starts a fresh session from the prompt.
+- Run a normal Codex TUI task and confirm Agent Lens starts a fresh session from the prompt.
 - Confirm the inspector shows trajectory, dependency evidence, confidence calibration, drift, and model routing.
 - Trigger a duplicated permission/tool event and confirm the dashboard does not show duplicate rows for the same action.
 
@@ -250,15 +250,15 @@ overpromising hard pre-execution enforcement for every normal TUI tool path.
 
 ## Phase 11: Guarded App-Server Terminal
 
-Make strict local control practical by launching Codex through AgentLens instead of
+Make strict local control practical by launching Codex through Agent Lens instead of
 trying to hard-block every arbitrary already-open TUI event. The guarded terminal uses
 Codex app-server's JSON-RPC approval callbacks for command and file-change requests,
-turns each callback into an AgentLens proposal, waits for dashboard decisions when the
+turns each callback into an Agent Lens proposal, waits for dashboard decisions when the
 gate is pending, and returns accept/cancel responses to Codex.
 
 Automatic validation:
 - JSON-RPC adapter tests cover initialize, thread start, turn start, approval request handling, and turn completion.
-- Approval bridge tests verify pending AgentLens gates are polled until approved.
+- Approval bridge tests verify pending Agent Lens gates are polled until approved.
 - Existing Codex CLI, session API, hook, policy/risk, and model-routing tests remain green.
 - Backend ruff passes.
 
@@ -267,13 +267,13 @@ Human validation:
 - Start the frontend on `localhost:3000`.
 - Run `uv run agentlens-run --repo /Users/aaryan/Desktop/Agent_Lens`.
 - Enter a read-only repo inspection task and confirm low-risk callbacks auto-execute/collapse.
-- Enter a small write task and confirm Codex waits for the AgentLens dashboard decision before the app-server approval response is sent.
+- Enter a small write task and confirm Codex waits for the Agent Lens dashboard decision before the app-server approval response is sent.
 - Block one pending write and confirm Codex receives a cancel decision and does not continue that action.
 
 Status: first implementation in progress. `agentlens-run` now starts a terminal-first
-Codex app-server turn, creates an AgentLens session, maps command/file-change/permission
+Codex app-server turn, creates an Agent Lens session, maps command/file-change/permission
 approval callbacks into `ToolCallProposal` records, and returns accept/cancel responses
-based on AgentLens gate decisions. Permission-profile grants are conservative until live
+based on Agent Lens gate decisions. Permission-profile grants are conservative until live
 validated against more app-server payloads.
 
 Follow-up status: multi-terminal session control is implemented. The API exposes
@@ -291,15 +291,15 @@ silently steal focus from a pinned approval session.
 ## Phase 12: Native Codex TUI App-Server Proxy
 
 Explore the production path that keeps Codex's polished native TUI while routing its
-app-server approval traffic through AgentLens. The proxy sits between `codex --remote`
-and `codex app-server`, converts approval requests into AgentLens gates, records native
+app-server approval traffic through Agent Lens. The proxy sits between `codex --remote`
+and `codex app-server`, converts approval requests into Agent Lens gates, records native
 approve/cancel responses back into the ledger, and enriches native approval prompts with
-AgentLens risk summaries while keeping dashboard URLs in structured AgentLens metadata.
+Agent Lens risk summaries while keeping dashboard URLs in structured Agent Lens metadata.
 
 Automatic validation:
 - Proxy state tests cover session creation from `turn/start`.
 - Proxy approval tests cover pending gate enrichment, auto-executed accept responses, and
-  native approve/cancel decisions being written back to AgentLens.
+  native approve/cancel decisions being written back to Agent Lens.
 - Existing app-server adapter tests remain green.
 - Backend ruff passes.
 
@@ -308,23 +308,23 @@ Human validation:
 - Start the frontend on `localhost:3000`.
 - Start `uv run agentlens-codex-proxy --repo /Users/aaryan/Desktop/Agent_Lens`.
 - Connect a real Codex TUI with `AGENTLENS_DISABLE_HOOKS=1 codex --ask-for-approval untrusted --sandbox workspace-write --remote ws://127.0.0.1:8791`.
-- Run a read-only task and confirm low-risk approvals enter the AgentLens ledger without
+- Run a read-only task and confirm low-risk approvals enter the Agent Lens ledger without
   interrupting Codex.
 - Run a second prompt in the same Codex TUI session and confirm the proxy forwards
   follow-up `turn/start` messages without crashing the TUI.
-- Confirm the dashboard keeps those follow-up prompts grouped under the same AgentLens
+- Confirm the dashboard keeps those follow-up prompts grouped under the same Agent Lens
   session and follows the active local session unless manually pinned.
 - Run a small README write and confirm the native Codex approval prompt appears while the
-  AgentLens dashboard shows the matching pending gate.
-- Approve one native prompt and confirm the AgentLens ledger records the same decision.
+  Agent Lens dashboard shows the matching pending gate.
+- Approve one native prompt and confirm the Agent Lens ledger records the same decision.
 
 Status: first implementation complete for the local proxy spike. `agentlens-codex-proxy`
 starts a local Codex app-server, exposes a WebSocket endpoint for `codex --remote`,
-intercepts app-server approval requests, posts them to AgentLens, returns automatic
+intercepts app-server approval requests, posts them to Agent Lens, returns automatic
 accept/cancel responses for resolved gates, forwards pending approvals to the native TUI
-with AgentLens context, and records native approve/cancel responses back to the ledger.
+with Agent Lens context, and records native approve/cancel responses back to the ledger.
 The remaining uncertainty is UI depth: Codex's native TUI may only render the standard
-approval fields, so rich AgentLens cards still live in the dashboard unless a future Codex
+approval fields, so rich Agent Lens cards still live in the dashboard unless a future Codex
 extension point or fork exposes a first-class native card surface.
 
 Final validation status: Phase 12 human validation passed for the native approve path.
@@ -332,7 +332,7 @@ The local guard ran on `127.0.0.1:8787`, the frontend connected to that local gu
 `agentlens-codex-proxy` ran on `ws://127.0.0.1:8791`. Codex launched successfully with
 `AGENTLENS_DISABLE_HOOKS=1 codex --ask-for-approval untrusted --sandbox workspace-write --remote ws://127.0.0.1:8791`.
 A read-only prompt produced auto-executed ledger entries. A README edit prompt triggered
-the native Codex approval prompt with AgentLens reason copy, and approving in Codex allowed
+the native Codex approval prompt with Agent Lens reason copy, and approving in Codex allowed
 the README edit. Automated validation passed after clearing the live proxy
 `AGENTLENS_DISABLE_HOOKS=1` environment for hook unit tests:
 - `env -u AGENTLENS_DISABLE_HOOKS uv run pytest` reported 73 passed with 1 warning.
@@ -342,7 +342,7 @@ the README edit. Automated validation passed after clearing the live proxy
 
 Follow-up validation status: native proxy block/cancel was also manually validated with a
 README edit prompt. Blocking in the native Codex prompt prevented the edit and the
-AgentLens ledger reflected the blocked decision.
+Agent Lens ledger reflected the blocked decision.
 
 ## Phase 13: Professional Ledger and Explainability
 
@@ -356,7 +356,7 @@ Automatic validation:
 - Browser smoke confirms the upgraded ledger renders without horizontal overflow.
 
 Human validation:
-- Open a local or hosted AgentLens session and confirm the queue, selected gate state,
+- Open a local or hosted Agent Lens session and confirm the queue, selected gate state,
   inspector, analytics, dependency graph, and Explain More panel are readable.
 - Confirm approve/block from Codex proxy still updates the ledger.
 
@@ -449,7 +449,7 @@ from saved traces and gates.
 ## Phase 14A: One-Command Local Stack
 
 Reduce local workflow friction by replacing the four-terminal setup with one command that
-starts all local AgentLens services and launches Codex through the native proxy.
+starts all local Agent Lens services and launches Codex through the native proxy.
 
 Automatic validation:
 - Unit tests pin the generated Codex command and configured local URLs.

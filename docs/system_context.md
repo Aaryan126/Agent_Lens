@@ -1,10 +1,10 @@
-# AgentLens System Context
+# Agent Lens System Context
 
 Last updated: June 23, 2026
 
 ## 1. Product Thesis
 
-AgentLens is a judgment layer for AI coding agents, with OpenAI Codex as the focus integration. The product does not exist to add another approval dialog. It exists to make human supervision meaningful when coding agents act quickly, repeatedly, and sometimes irreversibly.
+Agent Lens is a judgment layer for AI coding agents, with OpenAI Codex as the focus integration. The product does not exist to add another approval dialog. It exists to make human supervision meaningful when coding agents act quickly, repeatedly, and sometimes irreversibly.
 
 The core value is intelligence inside the gate:
 
@@ -15,11 +15,11 @@ The core value is intelligence inside the gate:
 - Translation: concise, developer-readable summaries that preserve technical accuracy without forcing the human to parse raw tool payloads.
 - Review episodes: human-facing groupings of raw traces/gates so repeated inspections and passive telemetry do not overwhelm the user.
 
-The guiding product assumption is: humans cannot supervise what they cannot understand at the speed it moves. AgentLens therefore treats raw tool events as audit material, not as the main user experience.
+The guiding product assumption is: humans cannot supervise what they cannot understand at the speed it moves. Agent Lens therefore treats raw tool events as audit material, not as the main user experience.
 
 ## 2. Current State
 
-The system is now a local-first AgentLens implementation with hosted-demo support. The most reliable strict-control path is the Codex app-server based flow. Normal Codex TUI hooks still exist, but they are observability-first because native hooks proved unreliable for hard pre-execution blocking in live validation.
+The system is now a local-first Agent Lens implementation with hosted-demo support. The most reliable strict-control path is the Codex app-server based flow. Normal Codex TUI hooks still exist, but they are observability-first because native hooks proved unreliable for hard pre-execution blocking in live validation.
 
 Implemented capabilities:
 
@@ -65,7 +65,7 @@ Important paths:
 
 ## 4. Conceptual Model
 
-AgentLens has two layers of truth:
+Agent Lens has two layers of truth:
 
 1. Raw ledger truth
    - Sessions
@@ -306,7 +306,7 @@ Timeline API computes ReviewEpisode records
 Frontend renders episode-first ledger and gate inspector
 ```
 
-For strict app-server flows, Codex waits for an accept/cancel response when a pending action is routed through AgentLens. For passive telemetry, the event is recorded as observed and auto-executed because it already happened.
+For strict app-server flows, Codex waits for an accept/cancel response when a pending action is routed through Agent Lens. For passive telemetry, the event is recorded as observed and auto-executed because it already happened.
 
 ## 7. Trace Capture
 
@@ -552,7 +552,7 @@ The audit log is append-oriented. Gate updates write a new audit event with the 
 
 ## 14. Codex Integration Surfaces
 
-AgentLens has several Codex integration paths. They exist because Codex surfaces expose different levels of control.
+Agent Lens has several Codex integration paths. They exist because Codex surfaces expose different levels of control.
 
 ### Simulator / Demo
 
@@ -607,7 +607,7 @@ cd backend
 uv run agentlens-run --repo /path/to/repo
 ```
 
-This launches Codex through app-server JSON-RPC, owns the approval callback path, creates AgentLens gates, waits for decisions, and sends accept/cancel responses back to Codex.
+This launches Codex through app-server JSON-RPC, owns the approval callback path, creates Agent Lens gates, waits for decisions, and sends accept/cancel responses back to Codex.
 
 Use for:
 
@@ -630,19 +630,19 @@ The proxy sits between the native Codex TUI and Codex app-server.
 
 It:
 
-- Creates/continues AgentLens sessions from `turn/start`.
+- Creates/continues Agent Lens sessions from `turn/start`.
 - Intercepts app-server approval requests.
-- Posts proposals to AgentLens.
+- Posts proposals to Agent Lens.
 - Auto-accepts auto-executed/approved/modified gates.
 - Cancels blocked gates.
-- Forwards pending gates to the native Codex approval prompt with AgentLens context.
-- Records native Codex approve/cancel decisions back into AgentLens.
+- Forwards pending gates to the native Codex approval prompt with Agent Lens context.
+- Records native Codex approve/cancel decisions back into Agent Lens.
 - Mirrors passive app-server telemetry when structured events are available.
 - Uses target hints from prompts and passive telemetry to improve file-change approval targeting.
 
 Use for:
 
-- Normal Codex TUI experience with AgentLens oversight.
+- Normal Codex TUI experience with Agent Lens oversight.
 - Preferred experimental native TUI integration path.
 
 ## 15. Frontend Ledger
@@ -908,7 +908,7 @@ Strong areas:
 - Product architecture is aligned with the PRD: intelligence is centered, not raw confirmation.
 - Local-first workflow keeps repository context on the developer machine.
 - App-server paths provide practical strict control.
-- Native TUI proxy preserves Codex user experience while adding AgentLens oversight.
+- Native TUI proxy preserves Codex user experience while adding Agent Lens oversight.
 - Risk/policy/intelligence layers are typed and testable.
 - UI now presents review episodes rather than raw repeated callbacks.
 - Explain/Q&A surfaces are grounded in visible evidence.

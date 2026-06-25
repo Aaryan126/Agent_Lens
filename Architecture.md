@@ -1,8 +1,8 @@
-# AgentLens Architecture
+# Agent Lens Architecture
 
 ## System Overview
 
-AgentLens is a judgment layer for AI coding agents (primarily OpenAI Codex). It sits between the agent and its execution environment, intercepting proposed tool calls, evaluating them through a pipeline of deterministic risk analysis and LLM-driven intelligence, then deciding whether to auto-execute, gate for human approval, or block outright. All decisions are recorded in an append-only audit ledger.
+Agent Lens is a judgment layer for AI coding agents (primarily OpenAI Codex). It sits between the agent and its execution environment, intercepting proposed tool calls, evaluating them through a pipeline of deterministic risk analysis and LLM-driven intelligence, then deciding whether to auto-execute, gate for human approval, or block outright. All decisions are recorded in an append-only audit ledger.
 
 The system follows a local-first architecture: a Python/FastAPI backend runs as a local guard process, a Next.js/TypeScript frontend provides the session ledger and approval console, and multiple adapter paths let Codex connect through hooks, a WebSocket proxy, or a direct app-server bridge.
 
@@ -20,7 +20,7 @@ graph TB
         CODEX[Codex CLI / TUI]
     end
 
-    subgraph "AgentLens Backend (Python / FastAPI)"
+    subgraph "Agent Lens Backend (Python / FastAPI)"
         API[FastAPI Server port 8787]
         SESSION[AgentLensSession]
         TRACE[TraceEngine]
@@ -31,7 +31,7 @@ graph TB
         AUDIT[Audit Log]
     end
 
-    subgraph "AgentLens Frontend (Next.js)"
+    subgraph "Agent Lens Frontend (Next.js)"
         UI[Session Ledger / Approval Console]
     end
 
@@ -69,7 +69,7 @@ graph LR
         H4[agentlens-codex<br/>CLI JSONL mode]
     end
 
-    subgraph "AgentLens Backend"
+    subgraph "Agent Lens Backend"
         API[FastAPI<br/>port 8787]
     end
 
@@ -533,9 +533,9 @@ The frontend is a single-page Next.js 15 app with six client-side views toggled 
 | `agentlens-guard` | `guard.py` | Starts FastAPI on port 8787 | Local-first API server. All other entry points talk to this via HTTP. |
 | `agentlens-demo` | `cli.py` | Creates session with fixture/default proposals | CLI simulator for testing without Codex. |
 | `agentlens-hook` | `codex_hook.py` | Codex post-processing hook | Reads JSON from stdin, creates/updates sessions, posts proposals, polls for decisions, exits 2 if blocked. |
-| `agentlens-codex` | `codex_terminal.py` | Runs Codex CLI in JSONL mode | Mirrors parsed Codex events into AgentLens API, prints readable terminal output. |
+| `agentlens-codex` | `codex_terminal.py` | Runs Codex CLI in JSONL mode | Mirrors parsed Codex events into Agent Lens API, prints readable terminal output. |
 | `agentlens-run` | `app_server_terminal.py` | Interactive/prompt mode via app-server | Spawns `codex app-server --stdio`, handles JSON-RPC approval callbacks, waits for human decisions. |
-| `agentlens-codex-proxy` | `codex_proxy.py` | WebSocket MITM proxy | Sits between Codex TUI and app-server, intercepts approval requests, enriches with AgentLens intelligence. |
+| `agentlens-codex-proxy` | `codex_proxy.py` | WebSocket MITM proxy | Sits between Codex TUI and app-server, intercepts approval requests, enriches with Agent Lens intelligence. |
 | `agentlens-dev` | `dev_stack.py` | One-command full stack | Spawns guard + frontend + proxy as subprocesses, optionally launches Codex. |
 
 ---
@@ -546,7 +546,7 @@ The frontend is a single-page Next.js 15 app with six client-side views toggled 
 sequenceDiagram
     participant TUI as Codex TUI
     participant Proxy as agentlens-codex-proxy
-    participant API as AgentLens API
+    participant API as Agent Lens API
     participant AS as Codex App-Server
 
     TUI->>Proxy: WebSocket connect
@@ -571,7 +571,7 @@ sequenceDiagram
             else Gate = BLOCKED
                 Proxy->>AS: approve(cancel)
             else Gate = PENDING
-                Proxy->>TUI: native approval prompt + AgentLens enrichment
+                Proxy->>TUI: native approval prompt + Agent Lens enrichment
                 TUI-->>Proxy: user decision
                 Proxy->>API: approve|block gate
                 Proxy->>AS: accept|cancel
@@ -584,7 +584,7 @@ sequenceDiagram
 
 ---
 
-## Codex TUI to AgentLens Perception Flow
+## Codex TUI to Agent Lens Perception Flow
 
 This is the strict native TUI path. Codex keeps its normal terminal UI, but it is launched
 with `--remote ws://127.0.0.1:8791`, so app-server traffic passes through
@@ -602,7 +602,7 @@ flowchart LR
         WS[WebSocket bridge<br/>127.0.0.1:8791]
         ROUTER{Message type}
         NORMALIZE[Normalize Codex payload<br/>tool, target, cwd, reason]
-        ENRICH[Inject AgentLens summary<br/>risk, evidence, dashboard metadata]
+        ENRICH[Inject Agent Lens summary<br/>risk, evidence, dashboard metadata]
     end
 
     subgraph RAW["Codex app-server messages"]
@@ -611,7 +611,7 @@ flowchart LR
         TELEMETRY[Passive command/read telemetry]
     end
 
-    subgraph AL["AgentLens perception"]
+    subgraph AL["Agent Lens perception"]
         PROPOSAL[ToolCallProposal<br/>what Codex wants to do]
         TRACE[TraceEvent<br/>what was observed]
         CONTEXT[DecisionContext<br/>instruction + recent trace + git state]
@@ -622,7 +622,7 @@ flowchart LR
         EPISODE[ReviewEpisode<br/>human-facing grouped action]
     end
 
-    subgraph BACKEND["AgentLens API + Ledger"]
+    subgraph BACKEND["Agent Lens API + Ledger"]
         TOOLCALLS["POST /sessions/{id}/tool-calls"]
         OBSERVE["POST /gates/{id}/observe"]
         DECISION["POST /gates/{id}/approve<br/>POST /gates/{id}/block<br/>POST /gates/{id}/modify"]
@@ -677,7 +677,7 @@ flowchart LR
     EPISODE --> TIMELINE
 ```
 
-AgentLens does not treat raw Codex traffic as final product truth. It perceives each
+Agent Lens does not treat raw Codex traffic as final product truth. It perceives each
 app-server approval or telemetry message as a typed `ToolCallProposal`, then enriches it
 with repository state, policy matches, deterministic risk, and optional OpenAI-generated
 trajectory/drift/confidence evidence. The ledger renders `ReviewEpisode` objects so the
